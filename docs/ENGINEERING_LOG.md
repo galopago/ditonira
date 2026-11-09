@@ -11,6 +11,7 @@ Language: English (see [ARCHITECTURE.md](ARCHITECTURE.md) language convention).
 
 | ID | Date | Type | Title | Status |
 |---|---|---|---|---|
+| ENG-004 | 2026-11-08 | Improvement | Stop TX via Esc; button label Stop (Esc) | Resolved |
 | ENG-003 | 2026-11-08 | Improvement | Always clean-rebuild; delete stale binaries/AppImages | Resolved |
 | ENG-002 | 2026-11-08 | Improvement | TX progress: color already-transmitted text | Resolved |
 | ENG-001 | 2026-11-08 | Improvement | English-only end-user UI strings | Resolved |
@@ -21,6 +22,16 @@ Language: English (see [ARCHITECTURE.md](ARCHITECTURE.md) language convention).
 ---
 
 ## Entries
+
+### ENG-004 — Stop TX via Esc; button label Stop (Esc)
+- **Date opened:** 2026-11-08
+- **Type:** Improvement
+- **Status:** Resolved
+- **Reported by:** Human (via Architect)
+- **Symptoms / goal:** Operator can abort transmission with the Stop button or Esc. Button label should show the shortcut compactly: `Stop (Esc)`.
+- **Evidence:** Product request; rules in `ARCHITECTURE.md` §7.2, §7.4, §10.
+- **Handoff:** DEC-004 in `HANDOFF.md` (For Implementer).
+- **Resolution:** Implementer (2026-11-08): `MainWindow` Stop label `Stop (Esc)`; window-level `QShortcut(Qt::Key_Escape)` with `Qt::WindowShortcut` connected to `onStop` (same `requestStop()` path). `onStop` returns immediately when idle so Esc does not quit or clear the form. Clean rebuild paths: `build/ditonira`, `dist/Ditonira-x86_64.AppImage`. Tester (2026-11-08): verified — Esc aborts TX successfully; ENG-004 accepted. Docs (2026-11-08): README Features / Recent updates and ARCHITECTURE MVP scope reflect shipped Esc stop.
 
 ### ENG-003 — Always clean-rebuild; delete stale binaries/AppImages
 - **Date opened:** 2026-11-08

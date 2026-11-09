@@ -38,11 +38,11 @@ src/SerialKeyLine.*       # QSerialPort RTS/DTR + polarity; key-up on close/abor
 - Polarity: normal asserted=key-down; inverted negates. Always force key-up on stop/finish/error.
 - Cooperative `requestStop()` between elements.
 
-## UI (MainWindow) — English + progress
+## UI (MainWindow) — English + progress + Esc stop
 
-- Controls: Port+Refresh, RTS|DTR, WPM 5–50, Invert polarity, text, Transmit/Stop, status.
+- Controls: Port+Refresh, RTS|DTR, WPM 5–50, Invert polarity, text, Transmit/`Stop (Esc)`, status.
 - Strings: English per ARCHITECTURE §7.2 (no Spanish labels/status/errors).
-- While TX: disable port/line/polarity/WPM/Transmit; text read-only; enable Stop.
+- While TX: disable port/line/polarity/WPM/Transmit; text read-only; enable Stop; **Esc** → same stop handler (§7.4); idle Esc must not quit/clear.
 - Progress (ARCHITECTURE §7.3): engine emits `progressChanged(int charsCompleted)` on source `Job::text`; UI styles `[0, charsCompleted)` as **sent** (`QPalette::Link` recommended) vs pending default; do not mutate text to show progress; keep partial highlight on Stop; clear on edit / new TX.
 
 ## Clean rebuild (ALWAYS — see also `implementer-clean-rebuild.mdc`)

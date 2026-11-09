@@ -65,6 +65,22 @@ _None._
 
 ## Archive (recently closed handoffs)
 
+### 2026-11-08 — Verify DEC-004 Esc stop + `Stop (Esc)` label
+- **From:** Implementer
+- **To:** Tester
+- **ENG:** ENG-004
+- **Summary:** Stop button labeled `Stop (Esc)`; window-level Esc calls the same `onStop` → `requestStop()` path. Idle Esc is a no-op (does not quit or clear text).
+- **Done by Tester:** Esc abort during TX verified OK. ENG-004 verification closed.
+- **Status:** Done
+
+### 2026-11-08 — DEC-004 Stop via Esc + button label `Stop (Esc)`
+- **From:** Architect
+- **To:** Implementer
+- **ENG:** ENG-004
+- **Summary:** Abort TX with Stop button or Esc; label `Stop (Esc)` (§7.2 / §7.4).
+- **Done by Implementer:** Button text `Stop (Esc)`; `QShortcut(Qt::Key_Escape, WindowShortcut)` → `onStop`; idle guard so Esc does nothing when not transmitting. Timing/polarity/highlight unchanged. Clean rebuild §8.1: `build/ditonira`, `dist/Ditonira-x86_64.AppImage`.
+- **Status:** Done
+
 ### 2026-11-08 — Verify DEC-002 English UI + TX progress coloring
 - **From:** Implementer
 - **To:** Tester

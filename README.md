@@ -6,21 +6,31 @@ Technical decisions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 **Language:** all project documentation (`README`, `docs/*`, Cursor rules) and **end-user UI strings** are **English**.
 
-## Features
+## Features (current)
 
 - **Serial port** selection with **Refresh** (`/dev/ttyUSB*`, `/dev/ttyACM*`, etc.).
 - **Key line:** **DTR** or **RTS** (unused line stays idle / key-up).
 - **Invert polarity** (asserted = key-down by default; checkbox inverts).
 - **Speed:** 5–50 WPM (PARIS timing, unit = `1200 / WPM` ms).
-- **Text to transmit** with **Transmit** / **Stop**.
+- **Text to transmit** with **Transmit** and **Stop (Esc)**.
+- **Abort with Esc:** the **Esc** key stops TX the same way as the **Stop (Esc)** button (window shortcut; works while the text box has focus). When idle, Esc does nothing (does not quit or clear the form).
 - **English UI** (labels, buttons, status, and errors).
-- **TX progress coloring:** already-sent characters use a distinct color (`QPalette::Link`); remaining text stays normal. **Stop** keeps the partial highlight; editing the text clears it; a new **Transmit** resets progress.
-- While transmitting: port, line, polarity, WPM, and Transmit are locked; the text box is read-only; **Stop** stays enabled and leaves the key line key-up.
+- **TX progress coloring:** already-sent characters use a distinct color (`QPalette::Link`); remaining text stays normal. Stop/Esc keeps the partial highlight; editing the text clears it; a new **Transmit** resets progress.
+- While transmitting: port, line, polarity, WPM, and Transmit are locked; the text box is read-only; **Stop (Esc)** stays enabled and leaves the key line key-up.
 - **AppImage** x86_64 distribution (Qt 5 bundled; no system Qt required on the host).
 
 Supported characters: A–Z, 0–9, `= / ? . ,`, and spaces. Everything else is omitted (not keyed).
 
 Not in the MVP: local sidetone, paddle/iambic, CW receive, macros, Windows/macOS.
+
+## Recent updates
+
+| Item | What changed |
+|---|---|
+| ENG-004 | Stop TX via **Esc**; button label **`Stop (Esc)`** |
+| ENG-002 | Live TX progress coloring (sent vs pending text) |
+| ENG-001 | English-only UI strings |
+| ENG-003 | Clean-rebuild policy (delete stale `build/` / AppImage before shipping a change) |
 
 ## Build requirements
 
@@ -55,8 +65,9 @@ Implementers must always follow this clean-rebuild policy (`docs/ARCHITECTURE.md
 1. Connect the USB–serial adapter (typical CW interfaces use DTR or RTS as the key line).
 2. Choose **Port:** and **Line:** (**DTR** or **RTS**). Use **Refresh** if the adapter was plugged in after startup.
 3. Set **WPM:** (5–50) and, if needed, enable **Invert polarity**.
-4. Enter text under **Text to transmit:** and press **Transmit**. **Stop** aborts TX and leaves the line key-up.
-5. Watch progress: sent text changes color as each character is keyed.
+4. Enter text under **Text to transmit:** and press **Transmit**.
+5. To abort: click **Stop (Esc)** or press **Esc**. Both leave the key line key-up and keep the partial progress color. Esc does nothing when you are not transmitting.
+6. Watch progress: sent text changes color as each character is keyed.
 
 ## Serial port permissions
 

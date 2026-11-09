@@ -13,16 +13,16 @@ Living document of technical decisions. All implementation must follow this text
 
 Linux GUI application that transmits Morse (CW) text by keying the **RTS** or **DTR** line of a USB–serial converter.
 
-### MVP scope
+### MVP scope (shipped)
 
 - Serial port selection.
 - Keyer line selection: RTS or DTR.
 - Invertible polarity (key-down = asserted or deasserted).
 - Speed in WPM.
 - Text box with the message to transmit.
-- **Transmit** and **Stop** actions.
+- **Transmit** and **Stop (Esc)** actions; **Esc** aborts TX the same as Stop (§7.4) — implemented (`QShortcut` + idle no-op).
 - English UI throughout.
-- Live TX progress: already-transmitted text shown in a distinct color (see §7).
+- Live TX progress: already-transmitted text shown in a distinct color (§7.3).
 
 ### Out of scope (MVP)
 
@@ -118,10 +118,10 @@ SerialKeyLine → QSerialPort (RTS/DTR)
 3. WPM spin box (5–50).
 4. Invert polarity checkbox.
 5. Text edit for the message (`QPlainTextEdit` or `QTextEdit`).
-6. Transmit / Stop buttons.
+6. Transmit / Stop buttons (Stop label includes Esc hint — §7.2 / §7.4).
 7. Status label (idle, transmitting, open error, etc.).
 
-While transmitting: disable port/line/polarity/WPM changes and Transmit; make the text edit **read-only**; enable Stop.
+While transmitting: disable port/line/polarity/WPM changes and Transmit; make the text edit **read-only**; enable Stop. **Esc** must abort TX the same way as Stop (§7.4).
 
 ### 7.2 UI language (English)
 
@@ -139,7 +139,7 @@ Canonical English copy (Implementer must use these or clear English equivalents;
 | Text label | `Text to transmit:` |
 | Placeholder | e.g. `CQ CQ DE CALL K` |
 | Transmit | `Transmit` |
-| Stop | `Stop` |
+| Stop | `Stop (Esc)` — compact self-explanatory label (button + Esc share the same action) |
 | Ready | `Ready` |
 | No ports | `No serial ports` / `(no ports)` |
 | Select port | `Select a port` |
@@ -174,6 +174,20 @@ Engine-emitted status/error strings shown in the UI must also be English.
 6. **Threading:** only the GUI thread paints; the engine only emits indices.
 
 `KeyerEngine` owns progress emission; `MainWindow` owns painting.
+
+### 7.4 Stop via button and Esc
+
+**Goal:** abort TX quickly without hunting for the mouse — same behavior as clicking Stop.
+
+**Rules:**
+
+1. **Same code path:** Esc and the Stop button both call the existing stop handler (`onStop` / `requestStop()`). No separate abort logic.
+2. **When Esc is active:** only while a transmission is in progress (same window of time Stop is enabled). When idle, Esc must **not** close the window or clear the text.
+3. **Focus:** Esc must work even if focus is in the text edit or another control (application/window shortcut), not only when Stop has focus.
+4. **Implementation (Qt 5):** prefer `QShortcut` / `QAction` with `Qt::Key_Escape` on `MainWindow` (e.g. `Qt::WindowShortcut` or `Qt::ApplicationShortcut` scoped to this window), connected to the Stop slot. Do not rely on the user tabbing to the Stop button.
+5. **Label:** Stop button text is **`Stop (Esc)`** so the shortcut is discoverable without a separate legend.
+6. **Optional:** `setShortcut(QKeySequence(Qt::Key_Escape))` on the Stop button is acceptable **in addition to** a window-level shortcut if both stay in sync; the window-level path is required so Esc works while the read-only text edit has focus.
+7. **Semantics unchanged:** cooperative stop, key-up on abort, partial progress highlight retained (§7.3).
 
 ## 8. AppImage packaging
 
@@ -232,6 +246,7 @@ README.md
 - AppImage runs on Linux x86_64 without system Qt.
 - All visible UI strings are English (§7.2).
 - During TX, already-handled text is visually distinct from remaining text; Stop leaves a partial highlight (§7.3).
+- During TX, **Esc** aborts the same as **Stop (Esc)**; when idle, Esc does not quit or wipe the form (§7.4).
 - Relevant decisions are recorded in this document.
 
 ## 11. LLM agent roles (hard boundaries)

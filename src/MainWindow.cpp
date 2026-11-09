@@ -3,10 +3,12 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QHBoxLayout>
+#include <QKeySequence>
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSerialPortInfo>
+#include <QShortcut>
 #include <QSpinBox>
 #include <QTextCursor>
 #include <QTextEdit>
@@ -69,7 +71,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     auto *btnRow = new QHBoxLayout();
     m_transmitButton = new QPushButton(tr("Transmit"), central);
-    m_stopButton = new QPushButton(tr("Stop"), central);
+    m_stopButton = new QPushButton(tr("Stop (Esc)"), central);
     m_stopButton->setEnabled(false);
     connect(m_transmitButton, &QPushButton::clicked, this, &MainWindow::onTransmit);
     connect(m_stopButton, &QPushButton::clicked, this, &MainWindow::onStop);
@@ -77,6 +79,12 @@ MainWindow::MainWindow(QWidget *parent)
     btnRow->addWidget(m_stopButton);
     btnRow->addStretch(1);
     root->addLayout(btnRow);
+
+    // Window-level Esc → same stop path as the button (ARCHITECTURE §7.4).
+    // Works while the read-only text edit has focus during TX.
+    auto *escStop = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    escStop->setContext(Qt::WindowShortcut);
+    connect(escStop, &QShortcut::activated, this, &MainWindow::onStop);
 
     m_statusLabel = new QLabel(tr("Ready"), central);
     root->addWidget(m_statusLabel);
@@ -183,6 +191,10 @@ void MainWindow::onTransmit()
 
 void MainWindow::onStop()
 {
+    // Idle Esc must not quit, clear text, or change status (§7.4).
+    if (!m_transmitting) {
+        return;
+    }
     m_engine->requestStop();
     m_statusLabel->setText(tr("Stopping…"));
 }
