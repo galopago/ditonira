@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Ditonira
+Comment=CW Morse keyer via USB serial RTS/DTR
+Exec=ditonira
+Icon=ditonira
+Categories=HamRadio;Utility;
+Terminal=false
+StartupNotify=true

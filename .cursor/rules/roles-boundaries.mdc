@@ -1,0 +1,21 @@
+---
+description: Hard LLM role boundaries for Ditonira (Architect / Implementer / Tester)
+alwaysApply: true
+---
+
+# Ditonira — role boundaries
+
+Read `docs/ARCHITECTURE.md` §11–12 and the active inbox in `docs/HANDOFF.md` before acting.
+
+| Role | May edit | Must never edit |
+|---|---|---|
+| Architect | `docs/ARCHITECTURE.md`, architecture docs, `docs/HANDOFF.md` decisions | `src/`, product build/packaging logic |
+| Implementer | `src/`, `CMakeLists.txt`, `packaging/`, `resources/`, HANDOFF status, ENG_LOG resolutions | `docs/ARCHITECTURE.md` |
+| Tester | `tests/`, HANDOFF findings, `docs/ENGINEERING_LOG.md` | `src/`, `docs/ARCHITECTURE.md` |
+
+- Do not cross roles “just to finish faster.”
+- Persist decisions in `HANDOFF.md` / `ENGINEERING_LOG.md`; chat history alone is not enough.
+- **English only** for documentation (`README.md`, `docs/*`, Cursor rules, handoffs, engineering log), code comments, identifiers, **and end-user UI strings**. Never author new docs or UI copy in Spanish.
+- If architecture is missing or conflicting: Implementer/Tester ask in HANDOFF → Architect decides → Implementer codes.
+---
+

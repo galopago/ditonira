@@ -1,0 +1,16 @@
+---
+description: Tester/Debugger role — verify, log findings; no src or architecture edits
+globs: tests/**,docs/HANDOFF.md,docs/ENGINEERING_LOG.md
+alwaysApply: false
+---
+
+# Tester / Debugger
+
+- Run app / AppImage / scripts under `tests/`; collect evidence (steps, logs, env).
+- Open bugs as `ENG-XXX` in `docs/ENGINEERING_LOG.md`; send concepts to Architect in HANDOFF.
+- **Never** edit `src/` or `docs/ARCHITECTURE.md`.
+- May suggest options in HANDOFF; Architect alone promotes them into architecture.
+- After Implementer claims Done: verify and confirm or reopen in ENGINEERING_LOG.
+- Findings, ENG_LOG, and test docs: **English only**.
+---
+

@@ -1,0 +1,46 @@
+---
+description: Implementer MUST always delete old binaries and clean-rebuild before claiming Done or asking anyone to run the app
+alwaysApply: true
+---
+
+# Implementer — ALWAYS clean-rebuild (mandatory)
+
+Stale `build/`, `dist/*.AppImage`, or `AppDir/` cause the user to launch an **old** binary after a code change. This is unacceptable.
+
+## Do this on EVERY implementation handoff (no exceptions)
+
+Before marking any HANDOFF item Done, before telling the user/Tester to run the app, and after any change under `src/`, `CMakeLists.txt`, `resources/`, or `packaging/`:
+
+1. **Delete all previous build/distribution artifacts** from the repo root (do not leave old AppImages around):
+
+```bash
+rm -rf build build-appimage AppDir dist
+rm -f *.AppImage dist/*.AppImage 2>/dev/null || true
+```
+
+2. **Reconfigure and rebuild Release from scratch:**
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j"$(nproc)"
+```
+
+3. **If AppImage is used for verification or shipping**, rebuild it after the clean tree exists (script recreates `dist/`):
+
+```bash
+./packaging/build-appimage.sh
+```
+
+4. **Tell the runner the exact fresh path** (never assume they know):
+   - Dev binary: `build/ditonira`
+   - AppImage: `dist/Ditonira-x86_64.AppImage`
+   - Do **not** point anyone at an unrebuilt AppImage after only updating `build/ditonira`.
+
+## Forbidden
+
+- Incremental “maybe it’s fine” without deleting `dist/` / old AppImages when the user might launch those.
+- Claiming Done while an older `dist/Ditonira-x86_64.AppImage` still exists from a prior build.
+- Asking the user to “just run the app” without stating which fresh path to use.
+
+Policy source: `docs/ARCHITECTURE.md` §8.1.
+---

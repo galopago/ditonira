@@ -1,0 +1,55 @@
+---
+description: Implementer rules — build MVP CW keyer from architecture (no architecture edits)
+globs: src/**,CMakeLists.txt,packaging/**,resources/**
+alwaysApply: false
+---
+
+# Implementer — MVP build rules
+
+Source of truth: `docs/ARCHITECTURE.md` (§1–10). Active tasks: `docs/HANDOFF.md` → **For Implementer**.
+
+## Hard constraints
+
+- **Do not** edit `docs/ARCHITECTURE.md`. Blockers → HANDOFF **For Architect**.
+- Stack only: **C++17**, **Qt 5 Widgets**, **QtSerialPort**, **CMake ≥ 3.16**, AppImage x86_64.
+- No Qt 6. No sidetone, paddle, receive, macros, or non-Linux targets in MVP.
+- Prefer small, compile-verified changes. Update HANDOFF status when done.
+- Documentation, comments, **and all UI strings: English only**.
+
+## Modules (keep this layout)
+
+```text
+src/main.cpp
+src/MainWindow.*          # GUI only; paints TX progress; no Morse timing; no QSerialPort I/O
+src/MorseEncoder.*        # static ITU encode + unitMs(wpm); no I/O
+src/KeyerEngine.*         # QThread; timing; emit progressChanged(charsCompleted)
+src/SerialKeyLine.*       # QSerialPort RTS/DTR + polarity; key-up on close/abort
+```
+
+## Timing & encoding
+
+- PARIS: `unitMs = 1200.0 / wpm`; dit=1, dah=3, elem gap=1, char gap=3, word gap=7.
+- Uppercase before encode; map A–Z, 0–9, `= / ? . ,`; space → WordGap; unknown → omit.
+- Timing on keyer thread with `steady_clock` absolute deadlines — **not** `QTimer` on GUI.
+
+## Hardware keying
+
+- Open `QSerialPort` 9600 8N1; key via RTS **or** DTR only; unused line idle (key-up).
+- Polarity: normal asserted=key-down; inverted negates. Always force key-up on stop/finish/error.
+- Cooperative `requestStop()` between elements.
+
+## UI (MainWindow) — English + progress
+
+- Controls: Port+Refresh, RTS|DTR, WPM 5–50, Invert polarity, text, Transmit/Stop, status.
+- Strings: English per ARCHITECTURE §7.2 (no Spanish labels/status/errors).
+- While TX: disable port/line/polarity/WPM/Transmit; text read-only; enable Stop.
+- Progress (ARCHITECTURE §7.3): engine emits `progressChanged(int charsCompleted)` on source `Job::text`; UI styles `[0, charsCompleted)` as **sent** (`QPalette::Link` recommended) vs pending default; do not mutate text to show progress; keep partial highlight on Stop; clear on edit / new TX.
+
+## Clean rebuild (ALWAYS — see also `implementer-clean-rebuild.mdc`)
+
+Before Done / before anyone runs the app: delete `build`, `build-appimage`, `AppDir`, `dist`, and old `*.AppImage`; then full Release reconfigure+build. Rebuild AppImage if that is what will be launched. Quote the exact fresh path. Policy: ARCHITECTURE §8.1.
+
+## Done when
+
+Clean rebuild done (§8.1); acceptance §10 met; HANDOFF item marked Done with fresh binary path(s).
+---

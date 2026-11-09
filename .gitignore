@@ -1,0 +1,17 @@
+/build/
+/build-appimage/
+/dist/
+/AppDir/
+/packaging/tools/
+*.AppImage
+.deps/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+*.user
+*.autosave
+.qt/
+.idea/
+.vscode/
