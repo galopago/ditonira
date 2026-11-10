@@ -12,6 +12,10 @@ class QPlainTextEdit;
 class QPushButton;
 class QLabel;
 
+namespace deepcw {
+class RxPanel;
+}
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -36,6 +40,7 @@ private:
     SerialKeyLine::Line selectedLine() const;
 
     KeyerEngine *m_engine = nullptr;
+    deepcw::RxPanel *m_rxPanel = nullptr;
 
     QComboBox *m_portCombo = nullptr;
     QPushButton *m_refreshButton = nullptr;

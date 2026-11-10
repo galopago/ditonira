@@ -19,6 +19,18 @@ _None._
 
 ## For Implementer
 
+### 2026-11-09 — DEC-005 Port DeepCW neural CW receive into Ditonira
+- **From:** Architect
+- **To:** Implementer
+- **ENG:** ENG-005
+- **Summary:** Port DeepCW neural CW decode into Ditonira (phased). Normative: [`ARCHITECTURE_RX_DEEPCW.md`](ARCHITECTURE_RX_DEEPCW.md).
+- **Phase RX-1:** **Done** + Tester PASS.
+- **Phase RX-2 + RX-2b (waterfall):** **Done** + **Tester PASS / GREEN-LIGHT** (2026-11-09).
+  - Live RX UI + `RxSpectrumWidget` waterfall (§7.3) verified: click/wheel↔Center; Stop RX freeze/clear; BW/center overlays; TX pauses RX + freezes waterfall then resumes; TX Esc/progress/polarity OK; controls/English OK. Prior field smoke: phone→camera mic decode OK.
+- **Phase RX-3:** **Done by Implementer** (2026-11-09) — awaiting Tester. Streaming commit per §5.2: `StreamingTranscript` + CTC word-space spans; capture tap → pending audio; `DecodeEngine::transcriptUpdated(committed, pending)`; RxPanel **Transcript** + **Live tail**. Retune clears pending only. Fresh paths: `build/ditonira`, `dist/Ditonira-x86_64.AppImage`.
+- **Do not start yet:** RX-4 pileup+narrow (wait for RX-3 Tester PASS).
+- **Status:** Open (RX-3 implemented; **awaiting Tester**)
+
 ### 2026-11-08 — DEC-003 Standing rule: always clean-rebuild (no stale binaries)
 - **From:** Architect
 - **To:** Implementer
@@ -37,7 +49,21 @@ _None._
 
 ## For Tester
 
-_None._
+### 2026-11-09 — Verify DEC-005 Phase RX-3 (streaming transcript)
+- **From:** Implementer
+- **To:** Tester
+- **ENG:** ENG-005
+- **Summary:** Phase RX-3 streaming committed transcript (`ARCHITECTURE_RX_DEEPCW.md` §5.2 / Phase RX-3). Word-space commit + live pending tail; waterfall/TX pause unchanged.
+- **Fresh paths (clean-rebuild §8.1):** `build/ditonira`, `dist/Ditonira-x86_64.AppImage`
+- **Action needed:**
+  1. Start RX with Morse audio (≥ a few words with spaces). Confirm **Live tail** updates within ~1–2 s, then text moves into **Transcript** after stable word-space gaps (not a full-window replace).
+  2. Confirm Transcript grows across phrases; Live tail clears briefly after each commit then shows the new pending decode.
+  3. Change Center Hz / Bandwidth while listening: Live tail resets; Transcript (committed) is kept.
+  4. Stop RX / Start RX: transcript clears for a new session.
+  5. TX while RX: still pauses capture + freezes waterfall; after TX, streaming resumes.
+  6. Smoke: waterfall click/wheel and Esc Stop TX still OK.
+  7. On PASS: mark Done here, note green-light (or not) for RX-4 on DEC-005; update ENG-005. Do **not** authorize RX-4 until RX-3 PASS.
+- **Status:** Open
 
 ---
 
@@ -64,6 +90,36 @@ _None._
 ---
 
 ## Archive (recently closed handoffs)
+
+### 2026-11-09 — Verify DEC-005 Phase RX-2 (live RX UI) + DEC-006 waterfall
+- **From:** Implementer
+- **To:** Tester
+- **ENG:** ENG-005, ENG-006
+- **Summary:** Live RX UI + required waterfall (§7.3 / RX-2b). DEC-006 implemented.
+- **Done by Tester (2026-11-09):** Formal checklist PASS — (1) click/wheel syncs Center Hz; (2) Stop RX freeze/clear OK; (3) BW/center markers update OK; (4) TX while RX pauses status + freezes waterfall, resumes after TX; (5) TX Esc/progress/polarity OK; (6) input/window/English controls OK. Prior field smoke retained (phone→camera mic decode + visual waterfall). **ENG-006 closed; RX-2 full PASS; green-light RX-3** on DEC-005.
+- **Status:** Done
+
+### 2026-11-09 — DEC-006 Required RX waterfall (debugging)
+- **From:** Architect
+- **To:** Implementer
+- **ENG:** ENG-006
+- **Summary:** Mandatory live waterfall (§7.3) as Phase RX-2b.
+- **Done by Implementer:** `RxSpectrumWidget` in `RxPanel`; `DecodeEngine::spectrumUpdated` (~20 fps STFT column 100–1500 Hz); overlay center+BW; click/wheel→center; pause on TX / clear on Stop. Clean rebuild: `build/ditonira`, `dist/Ditonira-x86_64.AppImage`. Orientation documented: X=time (right=newest), Y=freq (top=1500 Hz).
+- **Status:** Done
+
+### 2026-11-09 — Verify DEC-005 Phase RX-1 (WAV harness)
+- **From:** Implementer
+- **To:** Tester
+- **ENG:** ENG-005
+- **Summary:** Offline DeepCW port acceptance (§9 Phase RX-1). STFT/spectrogram/ORT/CTC + one-shot WAV harness.
+- **Done by Tester (2026-11-09):**
+  1. Smoke: `deepcw_wav_decode … testdata_cq_800hz.wav` → `CQ` (exact).
+  2. Exhaustive known-text synth WAVs (ITU timing, 9600 Hz): exact match for `CQ`; `CQ CQ DE TEST K`; `CQ CQ DE HA5BT HA5BT K`; `5NN 599 TU`; `CQ CQ DE W1AW` (700 Hz, with/without `--bandpass 700 250`).
+  3. External: [bt-soft/pico-radio-9 `test/cw`](https://github.com/bt-soft/pico-radio-9/tree/master/test/cw) WAVs decode fluent English prose; upstream `cw-content.txt` (`CQ CQ CQ DE HA5BT…`) does **not** match those files (metadata mismatch, not a Ditonira failure). ARRL W1AW MP3s not downloadable here (redirect to missing.png). DeepCW README bench attachment is MP4 SNR demo without published transcript; decode is non-empty garbage-ish groups (expected without reference).
+  4. TX still OK: `build/ditonira` starts under `QT_QPA_PLATFORM=offscreen`; `dist/Ditonira-x86_64.AppImage` present/executable.
+  5. Phase RX-1 accepted; ENG-005 remains In progress for RX-2+.
+  6. Follow-up noisy suite (cho45 / SM2CEW / HF synth) logged under ENG-005; **green-light issued for Phase RX-2** on DEC-005 Implementer item (2026-11-09).
+- **Status:** Done
 
 ### 2026-11-08 — Verify DEC-004 Esc stop + `Stop (Esc)` label
 - **From:** Implementer

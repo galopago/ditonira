@@ -1,0 +1,17 @@
+DeepCW English Conformer-CTC ONNX weights
+==========================================
+
+File in this directory:
+  deepcw_en.onnx
+
+Original filename in web-deep-cw-decoder:
+  public/models/en/39578E22-27CE-4AFB-989F-450345767A53
+
+SHA-256:
+  cd5ee38106348ad86a8f2d40ef1ce7dccea0d7f7fbfd0f2dee0fd1a8a28773ae
+
+Source product: DeepCW / deepcw-engine (MIT)
+  https://github.com/e04/web-deep-cw-decoder
+  https://github.com/e04/deepcw-engine
+
+See docs/THIRD_PARTY.md for full license notices.

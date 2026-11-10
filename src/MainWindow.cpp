@@ -1,5 +1,7 @@
 #include "MainWindow.h"
 
+#include "rx/RxPanel.h"
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QHBoxLayout>
@@ -10,6 +12,7 @@
 #include <QSerialPortInfo>
 #include <QShortcut>
 #include <QSpinBox>
+#include <QSplitter>
 #include <QTextCursor>
 #include <QTextEdit>
 #include <QVBoxLayout>
@@ -19,7 +22,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     setWindowTitle(tr("Ditonira CW Keyer"));
-    resize(560, 420);
+    resize(640, 720);
 
     m_sentFormat.setForeground(palette().color(QPalette::Link));
 
@@ -33,61 +36,73 @@ MainWindow::MainWindow(QWidget *parent)
     setCentralWidget(central);
     auto *root = new QVBoxLayout(central);
 
+    auto *splitter = new QSplitter(Qt::Vertical, central);
+    root->addWidget(splitter, 1);
+
+    auto *txPage = new QWidget(splitter);
+    auto *txLayout = new QVBoxLayout(txPage);
+
     // Port row
     auto *portRow = new QHBoxLayout();
-    portRow->addWidget(new QLabel(tr("Port:"), central));
-    m_portCombo = new QComboBox(central);
+    portRow->addWidget(new QLabel(tr("Port:"), txPage));
+    m_portCombo = new QComboBox(txPage);
     m_portCombo->setMinimumWidth(280);
     portRow->addWidget(m_portCombo, 1);
-    m_refreshButton = new QPushButton(tr("Refresh"), central);
+    m_refreshButton = new QPushButton(tr("Refresh"), txPage);
     connect(m_refreshButton, &QPushButton::clicked, this, &MainWindow::refreshPorts);
     portRow->addWidget(m_refreshButton);
-    root->addLayout(portRow);
+    txLayout->addLayout(portRow);
 
     // Line + WPM + polarity
     auto *optsRow = new QHBoxLayout();
-    optsRow->addWidget(new QLabel(tr("Line:"), central));
-    m_lineCombo = new QComboBox(central);
+    optsRow->addWidget(new QLabel(tr("Line:"), txPage));
+    m_lineCombo = new QComboBox(txPage);
     m_lineCombo->addItem(tr("DTR"), static_cast<int>(SerialKeyLine::Line::Dtr));
     m_lineCombo->addItem(tr("RTS"), static_cast<int>(SerialKeyLine::Line::Rts));
     optsRow->addWidget(m_lineCombo);
 
-    optsRow->addWidget(new QLabel(tr("WPM:"), central));
-    m_wpmSpin = new QSpinBox(central);
+    optsRow->addWidget(new QLabel(tr("WPM:"), txPage));
+    m_wpmSpin = new QSpinBox(txPage);
     m_wpmSpin->setRange(5, 50);
     m_wpmSpin->setValue(20);
     optsRow->addWidget(m_wpmSpin);
 
-    m_invertCheck = new QCheckBox(tr("Invert polarity"), central);
+    m_invertCheck = new QCheckBox(tr("Invert polarity"), txPage);
     optsRow->addWidget(m_invertCheck);
     optsRow->addStretch(1);
-    root->addLayout(optsRow);
+    txLayout->addLayout(optsRow);
 
-    root->addWidget(new QLabel(tr("Text to transmit:"), central));
-    m_textEdit = new QPlainTextEdit(central);
+    txLayout->addWidget(new QLabel(tr("Text to transmit:"), txPage));
+    m_textEdit = new QPlainTextEdit(txPage);
     m_textEdit->setPlaceholderText(tr("CQ CQ DE CALL K"));
     connect(m_textEdit, &QPlainTextEdit::textChanged, this, &MainWindow::onTextEdited);
-    root->addWidget(m_textEdit, 1);
+    txLayout->addWidget(m_textEdit, 1);
 
     auto *btnRow = new QHBoxLayout();
-    m_transmitButton = new QPushButton(tr("Transmit"), central);
-    m_stopButton = new QPushButton(tr("Stop (Esc)"), central);
+    m_transmitButton = new QPushButton(tr("Transmit"), txPage);
+    m_stopButton = new QPushButton(tr("Stop (Esc)"), txPage);
     m_stopButton->setEnabled(false);
     connect(m_transmitButton, &QPushButton::clicked, this, &MainWindow::onTransmit);
     connect(m_stopButton, &QPushButton::clicked, this, &MainWindow::onStop);
     btnRow->addWidget(m_transmitButton);
     btnRow->addWidget(m_stopButton);
     btnRow->addStretch(1);
-    root->addLayout(btnRow);
+    txLayout->addLayout(btnRow);
+
+    m_statusLabel = new QLabel(tr("Ready"), txPage);
+    txLayout->addWidget(m_statusLabel);
+
+    splitter->addWidget(txPage);
+
+    m_rxPanel = new deepcw::RxPanel(splitter);
+    splitter->addWidget(m_rxPanel);
+    splitter->setStretchFactor(0, 1);
+    splitter->setStretchFactor(1, 1);
 
     // Window-level Esc → same stop path as the button (ARCHITECTURE §7.4).
-    // Works while the read-only text edit has focus during TX.
     auto *escStop = new QShortcut(QKeySequence(Qt::Key_Escape), this);
     escStop->setContext(Qt::WindowShortcut);
     connect(escStop, &QShortcut::activated, this, &MainWindow::onStop);
-
-    m_statusLabel = new QLabel(tr("Ready"), central);
-    root->addWidget(m_statusLabel);
 
     refreshPorts();
 }
@@ -136,6 +151,9 @@ void MainWindow::setUiTransmitting(bool transmitting)
     m_wpmSpin->setEnabled(!transmitting);
     m_invertCheck->setEnabled(!transmitting);
     m_textEdit->setReadOnly(transmitting);
+    if (m_rxPanel) {
+        m_rxPanel->setPausedForTx(transmitting);
+    }
 }
 
 void MainWindow::applyProgressHighlight(int charsCompleted)
@@ -170,7 +188,6 @@ void MainWindow::onTransmit()
         return;
     }
 
-    // Exact text-box snapshot for progress indices (ARCHITECTURE §7.3).
     const QString text = m_textEdit->toPlainText();
     if (text.trimmed().isEmpty()) {
         m_statusLabel->setText(tr("Enter text to transmit"));
@@ -191,7 +208,6 @@ void MainWindow::onTransmit()
 
 void MainWindow::onStop()
 {
-    // Idle Esc must not quit, clear text, or change status (§7.4).
     if (!m_transmitting) {
         return;
     }
@@ -212,7 +228,6 @@ void MainWindow::onProgressChanged(int charsCompleted)
 void MainWindow::onTransmissionFinished(bool aborted)
 {
     Q_UNUSED(aborted);
-    // Partial highlight kept on Stop; full highlight kept on natural finish.
     setUiTransmitting(false);
 }
 
@@ -228,7 +243,6 @@ void MainWindow::onTextEdited()
     if (m_transmitting) {
         return;
     }
-    // User edited after TX — clear sent styling until the next Transmit.
     if (m_charsCompleted > 0 || !m_textEdit->extraSelections().isEmpty()) {
         clearProgressHighlight();
     }

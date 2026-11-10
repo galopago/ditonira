@@ -45,6 +45,17 @@ cmake --build "${BUILD_DIR}" -j"$(nproc)"
 rm -rf "${APPDIR}"
 DESTDIR="${APPDIR}" cmake --install "${BUILD_DIR}"
 
+# Ensure ONNX Runtime + DeepCW model are present for RX (ARCHITECTURE_RX_DEEPCW.md §8).
+ORT_ROOT="${ROOT}/.deps/onnxruntime-linux-x64-1.19.2"
+mkdir -p "${APPDIR}/usr/lib" "${APPDIR}/usr/share/ditonira/models"
+if [[ -f "${ORT_ROOT}/lib/libonnxruntime.so.1.19.2" ]]; then
+  cp -f "${ORT_ROOT}/lib/libonnxruntime.so.1.19.2" "${APPDIR}/usr/lib/"
+  ln -sfn libonnxruntime.so.1.19.2 "${APPDIR}/usr/lib/libonnxruntime.so.1"
+  ln -sfn libonnxruntime.so.1 "${APPDIR}/usr/lib/libonnxruntime.so"
+fi
+cp -f "${ROOT}/resources/models/deepcw_en.onnx" "${APPDIR}/usr/share/ditonira/models/" 2>/dev/null || true
+cp -f "${ROOT}/resources/models/NOTICE.txt" "${APPDIR}/usr/share/ditonira/models/" 2>/dev/null || true
+
 # AppImage expects icon name matching desktop Icon= without extension under usr/share/icons
 mkdir -p "${APPDIR}/usr/share/icons/hicolor/256x256/apps"
 cp -f "${ROOT}/resources/icons/ditonira.png" \

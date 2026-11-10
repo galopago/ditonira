@@ -11,9 +11,12 @@ Living document of technical decisions. All implementation must follow this text
 
 ## 1. Goal
 
-Linux GUI application that transmits Morse (CW) text by keying the **RTS** or **DTR** line of a USB–serial converter.
+Linux GUI application for amateur CW:
 
-### MVP scope (shipped)
+1. **Transmit** Morse text by keying the **RTS** or **DTR** line of a USB–serial converter (shipped MVP).
+2. **Receive / decode** CW audio with the DeepCW neural pipeline (ONNX Conformer-CTC) — see [`ARCHITECTURE_RX_DEEPCW.md`](ARCHITECTURE_RX_DEEPCW.md) (DEC-005, phased).
+
+### MVP scope (shipped — TX)
 
 - Serial port selection.
 - Keyer line selection: RTS or DTR.
@@ -24,12 +27,18 @@ Linux GUI application that transmits Morse (CW) text by keying the **RTS** or **
 - English UI throughout.
 - Live TX progress: already-transmitted text shown in a distinct color (§7.3).
 
-### Out of scope (MVP)
+### RX scope (approved — DeepCW port)
+
+- Full algorithmic port of DeepCW Normal-mode decode (9600 Hz → STFT → 65-bin spectrogram → ONNX → CTC).
+- Phased: offline WAV harness → live UI → streaming transcript → optional pileup.
+- **Normative detail:** [`ARCHITECTURE_RX_DEEPCW.md`](ARCHITECTURE_RX_DEEPCW.md). Do not invent alternate DSP/ML paths.
+
+### Out of scope (current)
 
 - Local sidetone.
 - Manual key / paddle / iambic.
-- CW receive.
-- Macros, decoder, memory banks.
+- DeepCW Web Serial keyer, RTTY, JA model (absent), neural NR (not in DeepCW web code).
+- Macros, memory banks.
 - Windows / macOS (Linux x86_64 AppImage only).
 
 ## 2. Stack
@@ -39,8 +48,10 @@ Linux GUI application that transmits Morse (CW) text by keying the **RTS** or **
 | Language | C++17 | Required; enough for `chrono`, `atomic`, etc. |
 | GUI | Qt 5 Widgets | Better fit for older distros; mature AppImage tooling |
 | Serial | QtSerialPort (`QSerialPort`) | Stable RTS/DTR API without data I/O |
-| Build | CMake ≥ 3.16 | Standard `find_package(Qt5 …)` |
-| Distribution | AppImage x86_64 | End user needs no system Qt; see `packaging/build-appimage.sh` |
+| RX inference | ONNX Runtime C++ (CPU EP) | Same models as DeepCW; no WASM |
+| RX audio | PortAudio or Qt5 audio + resample to 9600 Hz | Match DeepCW capture rate |
+| Build | CMake ≥ 3.16 | Standard `find_package(Qt5 …)` + ORT |
+| Distribution | AppImage x86_64 | End user needs no system Qt; bundle ORT + ONNX weights |
 
 If `find_package(Qt5SerialPort)` fails but the runtime `.so` is present, CMake may use headers extracted under `.deps/qt5serialport-dev` (local dev only; the AppImage still bundles the library). Prefer installing `libqt5serialport5-dev` on the build host.
 
@@ -218,9 +229,11 @@ Never leave a stale AppImage beside a newer `build/ditonira` without saying whic
 
 ```text
 docs/
-  ARCHITECTURE.md          # Architect-owned; technical decisions
-  HANDOFF.md               # Cross-role inbox / decisions / open points
-  ENGINEERING_LOG.md       # Chronological, indexed bugs & improvements
+  ARCHITECTURE.md              # Architect-owned; technical decisions
+  ARCHITECTURE_RX_DEEPCW.md    # DeepCW RX port (normative for receive)
+  HANDOFF.md                   # Cross-role inbox / decisions / open points
+  ENGINEERING_LOG.md           # Chronological, indexed bugs & improvements
+  THIRD_PARTY.md               # Licenses (DeepCW, ORT, …) — Implementer creates
 CMakeLists.txt
 src/
   main.cpp
@@ -228,12 +241,14 @@ src/
   MorseEncoder.h / MorseEncoder.cpp
   KeyerEngine.h / KeyerEngine.cpp
   SerialKeyLine.h / SerialKeyLine.cpp
+  rx/                          # DeepCW port modules (see ARCHITECTURE_RX_DEEPCW.md)
 resources/
   ditonira.desktop
   icons/ditonira.png
+  models/                      # deepcw_en.onnx (+ narrow when RX-4)
 packaging/
   build-appimage.sh
-tests/                     # Tester-owned scripts (optional until first suite)
+tests/                         # Tester-owned scripts (optional until first suite)
 README.md
 ```
 
@@ -247,7 +262,8 @@ README.md
 - All visible UI strings are English (§7.2).
 - During TX, already-handled text is visually distinct from remaining text; Stop leaves a partial highlight (§7.3).
 - During TX, **Esc** aborts the same as **Stop (Esc)**; when idle, Esc does not quit or wipe the form (§7.4).
-- Relevant decisions are recorded in this document.
+- RX (when a DEC-005 phase is Done): acceptance bullets for that phase in [`ARCHITECTURE_RX_DEEPCW.md`](ARCHITECTURE_RX_DEEPCW.md) §9.
+- Relevant decisions are recorded in this document / RX companion doc.
 
 ## 11. LLM agent roles (hard boundaries)
 

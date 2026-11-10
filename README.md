@@ -8,6 +8,8 @@ Technical decisions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Features (current)
 
+### Transmit (shipped)
+
 - **Serial port** selection with **Refresh** (`/dev/ttyUSB*`, `/dev/ttyACM*`, etc.).
 - **Key line:** **DTR** or **RTS** (unused line stays idle / key-up).
 - **Invert polarity** (asserted = key-down by default; checkbox inverts).
@@ -19,6 +21,10 @@ Technical decisions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - While transmitting: port, line, polarity, WPM, and Transmit are locked; the text box is read-only; **Stop (Esc)** stays enabled and leaves the key line key-up.
 - **AppImage** x86_64 distribution (Qt 5 bundled; no system Qt required on the host).
 
+### Receive (in progress — DeepCW port)
+
+Neural CW decode ported from [DeepCW](https://github.com/e04/web-deep-cw-decoder) (ONNX Conformer-CTC, 9600 Hz STFT pipeline). Live RX UI includes a **required waterfall** for tuning/debugging (center/bandwidth overlay). Architecture: [docs/ARCHITECTURE_RX_DEEPCW.md](docs/ARCHITECTURE_RX_DEEPCW.md) §7.3. Phases: DEC-005 / DEC-006.
+
 Supported characters: A–Z, 0–9, `= / ? . ,`, and spaces. Everything else is omitted (not keyed).
 
 Not in the MVP: local sidetone, paddle/iambic, CW receive, macros, Windows/macOS.
@@ -27,6 +33,8 @@ Not in the MVP: local sidetone, paddle/iambic, CW receive, macros, Windows/macOS
 
 | Item | What changed |
 |---|---|
+| ENG-006 | RX **waterfall** required for debugging (DEC-006 / RX-2b) |
+| ENG-005 | Neural CW **receive** — DeepCW ONNX port (architecture + DEC-005; implementation phased) |
 | ENG-004 | Stop TX via **Esc**; button label **`Stop (Esc)`** |
 | ENG-002 | Live TX progress coloring (sent vs pending text) |
 | ENG-001 | English-only UI strings |
@@ -99,6 +107,7 @@ After rebuilding the app, do not launch an old AppImage left under `dist/` — r
 | Doc | Purpose |
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical decisions (source of truth) |
+| [docs/ARCHITECTURE_RX_DEEPCW.md](docs/ARCHITECTURE_RX_DEEPCW.md) | DeepCW receive port (normative DSP/ML/UI phases) |
 | [docs/HANDOFF.md](docs/HANDOFF.md) | Cross-role inbox for LLM agents |
 | [docs/ENGINEERING_LOG.md](docs/ENGINEERING_LOG.md) | Bug / improvement index (`ENG-XXX`) |
 

@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Architect
 
-- Own `docs/ARCHITECTURE.md` and design decision docs under `docs/`.
+- Own `docs/ARCHITECTURE.md`, `docs/ARCHITECTURE_RX_DEEPCW.md`, and other design decision docs under `docs/`.
 - Record *what* and *why*; leave *how* coding to the Implementer via HANDOFF.
 - **Never** edit `src/`, product packaging logic, or “quick-fix” the app in code.
 - Promote Tester concepts into ARCHITECTURE only after an explicit decision.

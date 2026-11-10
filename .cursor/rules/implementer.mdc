@@ -6,7 +6,9 @@ alwaysApply: false
 
 # Implementer — MVP build rules
 
-Source of truth: `docs/ARCHITECTURE.md` (§1–10). Active tasks: `docs/HANDOFF.md` → **For Implementer**.
+Source of truth: `docs/ARCHITECTURE.md` (§1–10).  
+RX / DeepCW port: `docs/ARCHITECTURE_RX_DEEPCW.md` (normative; DEC-005).  
+Active tasks: `docs/HANDOFF.md` → **For Implementer**.
 
 ## Hard constraints
 
@@ -44,6 +46,14 @@ src/SerialKeyLine.*       # QSerialPort RTS/DTR + polarity; key-up on close/abor
 - Strings: English per ARCHITECTURE §7.2 (no Spanish labels/status/errors).
 - While TX: disable port/line/polarity/WPM/Transmit; text read-only; enable Stop; **Esc** → same stop handler (§7.4); idle Esc must not quit/clear.
 - Progress (ARCHITECTURE §7.3): engine emits `progressChanged(int charsCompleted)` on source `Job::text`; UI styles `[0, charsCompleted)` as **sent** (`QPalette::Link` recommended) vs pending default; do not mutate text to show progress; keep partial highlight on Stop; clear on edit / new TX.
+
+## RX / DeepCW (when DEC-005 is Open)
+
+- Follow `ARCHITECTURE_RX_DEEPCW.md` exactly (9600 Hz, FFT 768, hop 144, 65 bins, `noise_q90_log1p`, CTC blank 41).
+- Phase order mandatory: RX-1 offline → RX-2 live UI (**incl. required waterfall §7.3 / DEC-006**) → RX-3 streaming → RX-4 pileup.
+- Waterfall is **required** for RX debugging (live scroll, Hz axis, center/BW overlay, click/wheel tune); not optional.
+- Do not invent alternate decoders; do not port React/WASM/Web Serial keyer/JA/NR-marketing.
+- Ship `resources/models/deepcw_en.onnx` + ORT in AppImage; attribute MIT in `docs/THIRD_PARTY.md`.
 
 ## Clean rebuild (ALWAYS — see also `implementer-clean-rebuild.mdc`)
 
