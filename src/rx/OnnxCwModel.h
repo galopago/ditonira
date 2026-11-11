@@ -15,8 +15,8 @@ struct InferenceResult {
 };
 
 /**
- * ONNX Runtime wrapper for wide EN Conformer-CTC.
- * Input name: spectrogram [1,1,T,65]; output name: log_probs [1,T_out,42].
+ * ONNX Runtime wrapper for EN Conformer-CTC (wide 65-bin or narrow 3-bin).
+ * Input name: spectrogram [1,1,T,F]; output name: log_probs [1,T_out,42].
  */
 class OnnxCwModel
 {

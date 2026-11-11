@@ -11,13 +11,57 @@ Language: **English only** for all documentation and handoff entries (see ARCHIT
 
 ## For Architect
 
-<!-- Tester findings and Implementer blockers that need an architectural decision. -->
-
 _None._
 
 ---
 
 ## For Implementer
+
+### 2026-11-10 — DEC-010 Monitor / THRU receive audio routing (headphones)
+- **From:** Architect
+- **To:** Implementer
+- **ENG:** ENG-010
+- **Summary:** Like DeepCW **THRU**: let the operator **route RX audio** to a selectable **output** (headphones/speakers), optionally bandpass-filtered to current Center/Bandwidth. Spec: `ARCHITECTURE_RX_DEEPCW.md` **§7.4** (Phase RX-5). Classical filter only — not neural NR.
+- **Done by Implementer (2026-11-10):**
+  1. UI on `RxPanel`: **Output** combo + Refresh, **Enable monitor**, **Filtered (center/BW)** (default on).
+  2. Dedicated PortAudio output via `AudioMonitor`; capture mirrors 9600 Hz into lock-free `MonitorFifo`; optional `StreamingBandpass` (4-pass RBJ) tracks Center/BW.
+  3. §10.1: PA out callback uses preallocated scratch + filter state; no heap/mutex. TX pause mutes monitor; Stop RX keeps silence while decode path stops independently.
+  4. English strings; no Qt Multimedia / neural NR / downloads. Offline lean unchanged.
+  5. Clean-rebuild + factory AppImage: `build/ditonira`, `dist/Ditonira-x86_64.AppImage` (GLIBC **2.29** + lean gate PASS).
+- **Status:** Done
+
+### 2026-11-10 — DEC-009 Harden audio/RX path (ENG-009 pileup segfault)
+- **From:** Architect
+- **To:** Implementer
+- **ENG:** ENG-009
+- **Summary:** Tester: AppImage **segfault** during multi-tone / Pileup RX (`pileup_4track_multispeed.wav`). ALSA probe messages are **not** the bug to “fix away.” Architecture: `ARCHITECTURE_RX_DEEPCW.md` **§10.1**.
+- **Done by Implementer (2026-11-10):**
+  1. **Root cause (ASan):** `PileupTracker::update` used `std::vector<bool>` + `push_back` into `m_tracked` while indexing `matched` → SEGV in `_Bit_reference::operator bool` (`PileupTracker.cpp`). Fixed with `vector<char>` + deferred newcomers.
+  2. **§10.1 hardening:** `PortAudioHost` refcounted init; `listInputDevices` no longer `Pa_Terminate`s live PA; lock-free `AudioRingBuffer`; PA callback uses preallocated resample scratch only (no heap/tap/mutex); DecodeEngine pulls samples via `consumeNew` for streaming.
+  3. **Evidence:** ASan before = SEGV stack above; after = `./build/pileup_wav_smoke tests/rx_wav/pileup_4track_multispeed_9600.wav` → `OK … hops=8` (exit 0). `gdb` not installed on build host; ASan used instead.
+  4. Factory AppImage rebuilt: `dist/Ditonira-x86_64.AppImage` (GLIBC + lean gates PASS). Also `build/ditonira`.
+- **Status:** Done + **Tester PASS** (2026-11-10 — no segfault in live Pileup)
+
+### 2026-11-10 — DEC-008 Offline-only lean AppImage (NO internet/telemetry/downloads)
+- **From:** Architect
+- **To:** Implementer
+- **ENG:** ENG-008
+- **Summary:** Product is **offline + lean**: no internet, no telemetry, no runtime downloads, no unused HTTP/CUPS/TLS stacks. **Clarification:** **local** sockets (Pulse/PipeWire, D-Bus, Unix IPC) **may be required** by audio/GUI — do **not** strip or forbid those. Forbidden = remote/internet. See `ARCHITECTURE.md` §2.1 / §8.0.5; `implementer-offline-lean.mdc`.
+- **Done by Implementer (2026-11-10):**
+  1. Audit: CMake/`src` link only Widgets+SerialPort (+ PortAudio/ORT); no `QNetwork*` / telemetry / runtime downloads.
+  2. Packaging: `strip-lean-appdir.sh` after linuxdeploy; `check-appimage-lean.sh` gate; `--exclude-library` for Network/Print/CUPS/TLS; pack via `appimagetool` so strip sticks.
+  3. Factory rebuild: **Lean gate PASS** + **GLIBC gate PASS** (newest **2.29**). Local D-Bus/audio IPC libs retained on purpose.
+  4. Fresh end-user file: `dist/Ditonira-x86_64.AppImage`.
+- **Status:** Done
+
+### 2026-11-10 — DEC-007 P0 Self-contained AppImage (user runs ONE file)
+- **From:** Architect
+- **To:** Implementer
+- **ENG:** ENG-007
+- **Summary:** User ask = **one AppImage that runs on another Linux without installing libs**. Current file fails elsewhere (`GLIBC_2.34`). Fix the **artifact**. Do **not** tell the human to install Docker, compile on an old PC, or change their workflow — that is **not** the product.
+- **Done by Implementer (2026-11-10):** Factory under `packaging/` (`Dockerfile` ubuntu:20.04, `build-appimage-docker.sh`, `factory-build.sh`, `check-appimage-glibc.sh`). Shipping AppImage rebuilt in that factory. **GLIBC gate PASS** — newest on `usr/bin/ditonira` is **GLIBC_2.29** (≤ 2.31). Qt/ORT/ICU bundled. README: user = chmod/run only; Docker notes under Developers. Factory record: `dist/Ditonira-x86_64.AppImage.factory.txt` (`ditonira-appimage-factory:20.04`, id `sha256:2c6c0fdd76159fef902e5cbf676dbb100405b9b9d51bbc233b656c14bb7cdb41`).
+- **End-user file:** `dist/Ditonira-x86_64.AppImage` — `chmod +x` and run (no build steps).
+- **Status:** Done + **Tester PASS** (2026-11-10 second Linux)
 
 ### 2026-11-09 — DEC-005 Port DeepCW neural CW receive into Ditonira
 - **From:** Architect
@@ -27,9 +71,9 @@ _None._
 - **Phase RX-1:** **Done** + Tester PASS.
 - **Phase RX-2 + RX-2b (waterfall):** **Done** + **Tester PASS / GREEN-LIGHT** (2026-11-09).
   - Live RX UI + `RxSpectrumWidget` waterfall (§7.3) verified: click/wheel↔Center; Stop RX freeze/clear; BW/center overlays; TX pauses RX + freezes waterfall then resumes; TX Esc/progress/polarity OK; controls/English OK. Prior field smoke: phone→camera mic decode OK.
-- **Phase RX-3:** **Done by Implementer** (2026-11-09) — awaiting Tester. Streaming commit per §5.2: `StreamingTranscript` + CTC word-space spans; capture tap → pending audio; `DecodeEngine::transcriptUpdated(committed, pending)`; RxPanel **Transcript** + **Live tail**. Retune clears pending only. Fresh paths: `build/ditonira`, `dist/Ditonira-x86_64.AppImage`.
-- **Do not start yet:** RX-4 pileup+narrow (wait for RX-3 Tester PASS).
-- **Status:** Open (RX-3 implemented; **awaiting Tester**)
+- **Phase RX-3:** **Done** + **Tester PASS / GREEN-LIGHT** (2026-11-10). Streaming Transcript + Live tail verified (B1–B6): commit on word-space gaps; retune clears pending only; Stop/Start clears session; TX pause/resume OK; waterfall/Esc smoke OK.
+- **Phase RX-4:** **Done** + **Tester PASS** (2026-11-10). Pileup multi-lock on fixture tones 500/700/900/1100 Hz + cyan markers; decode partial but accepted as relatively functional; residual false lock ~162 Hz and non-zero CER noted, not blocking. DEC-009 crash fix verified live.
+- **Status:** Done (all RX phases Tester-accepted; ENG-005 Resolved)
 
 ### 2026-11-08 — DEC-003 Standing rule: always clean-rebuild (no stale binaries)
 - **From:** Architect
@@ -49,20 +93,18 @@ _None._
 
 ## For Tester
 
-### 2026-11-09 — Verify DEC-005 Phase RX-3 (streaming transcript)
+### 2026-11-10 — Verify DEC-010 Monitor / THRU (RX-5)
 - **From:** Implementer
 - **To:** Tester
-- **ENG:** ENG-005
-- **Summary:** Phase RX-3 streaming committed transcript (`ARCHITECTURE_RX_DEEPCW.md` §5.2 / Phase RX-3). Word-space commit + live pending tail; waterfall/TX pause unchanged.
-- **Fresh paths (clean-rebuild §8.1):** `build/ditonira`, `dist/Ditonira-x86_64.AppImage`
-- **Action needed:**
-  1. Start RX with Morse audio (≥ a few words with spaces). Confirm **Live tail** updates within ~1–2 s, then text moves into **Transcript** after stable word-space gaps (not a full-window replace).
-  2. Confirm Transcript grows across phrases; Live tail clears briefly after each commit then shows the new pending decode.
-  3. Change Center Hz / Bandwidth while listening: Live tail resets; Transcript (committed) is kept.
-  4. Stop RX / Start RX: transcript clears for a new session.
-  5. TX while RX: still pauses capture + freezes waterfall; after TX, streaming resumes.
-  6. Smoke: waterfall click/wheel and Esc Stop TX still OK.
-  7. On PASS: mark Done here, note green-light (or not) for RX-4 on DEC-005; update ENG-005. Do **not** authorize RX-4 until RX-3 PASS.
+- **ENG:** ENG-010
+- **Summary:** Phase RX-5 — route live RX audio to headphones/speakers with optional center/BW bandpass (`ARCHITECTURE_RX_DEEPCW.md` §7.4).
+- **Fresh paths (clean-rebuild §8.1):** `build/ditonira` · `dist/Ditonira-x86_64.AppImage` (factory GLIBC 2.29 + lean PASS).
+- **Action needed (acceptance §7.4):**
+  1. Select **Output**, check **Enable monitor**, Start RX → hear RX in headphones/speakers.
+  2. **Filtered (center/BW)** on → filter follows Center/Bandwidth; off → unfiltered.
+  3. Uncheck Enable monitor → silence while decode continues.
+  4. TX mutes monitor; resume after TX; no segfault.
+  5. AppImage still portable / lean (spot-check OK).
 - **Status:** Open
 
 ---
@@ -90,6 +132,38 @@ _None._
 ---
 
 ## Archive (recently closed handoffs)
+
+### 2026-11-10 — Verify DEC-005 Phase RX-4 (pileup + narrow) + DEC-009 no-segfault
+- **From:** Implementer
+- **To:** Tester
+- **ENG:** ENG-005, ENG-009
+- **Summary:** Phase RX-4 pileup + DEC-009 audio/tracker hardening.
+- **Done by Tester (2026-11-10):** Live Pileup with `pileup_4track_multispeed.wav` — **no segfault**. Locks ~500/700/900/1100 Hz + cyan markers; decode fragments accepted as **relatively functional** (Human/Tester). Spurious ~162 Hz empty track and imperfect CER noted, not blocking. **RX-4 PASS; ENG-009 Resolved; ENG-005 Resolved.**
+- **Status:** Done
+
+### 2026-11-10 — ENG-009 AppImage segfault during pileup (Architect intake)
+- **From:** Tester
+- **To:** Architect
+- **ENG:** ENG-009
+- **Summary:** Segfault on multi-tone/Pileup AppImage test; ALSA probe noise + RT/PA suspects from code review.
+- **Done by Architect:** Spec `ARCHITECTURE_RX_DEEPCW.md` §10.1 + **DEC-009** for Implementer; RX-4 remains blocked until fix.
+- **Status:** Done
+
+### 2026-11-09 — Verify DEC-005 Phase RX-3 (streaming transcript)
+- **From:** Implementer
+- **To:** Tester
+- **ENG:** ENG-005
+- **Summary:** Phase RX-3 streaming committed transcript (`ARCHITECTURE_RX_DEEPCW.md` §5.2 / Phase RX-3). Word-space commit + live pending tail; waterfall/TX pause unchanged.
+- **Done by Tester (2026-11-10):** B1–B6 PASS — Live tail updates then commits to Transcript on word-space gaps; Transcript grows; retune resets Live tail only; Stop/Start clears session; TX while RX pauses/resumes; waterfall click/wheel + Esc TX smoke OK. **RX-3 PASS; green-light RX-4** on DEC-005.
+- **Status:** Done
+
+### 2026-11-10 — Verify DEC-007 portable AppImage (second Linux) + DEC-008 lean
+- **From:** Implementer
+- **To:** Tester
+- **ENG:** ENG-007, ENG-008
+- **Summary:** Portable + lean AppImage from Ubuntu 20.04 factory. Must run on another machine **without** apt of Qt/ORT/ICU; no Network/CUPS/TLS product stack.
+- **Done by Tester (2026-11-10):** Second Linux — AppImage starts with no missing-lib / GLIBC warnings; serial port list + keying OK; waterfall visible; some RX decode (weaker than primary PC — attributed to mic/acoustic path, not packaging); host **offline** (no internet) and app did not require network. **ENG-007 + ENG-008 PASS.**
+- **Status:** Done
 
 ### 2026-11-09 — Verify DEC-005 Phase RX-2 (live RX UI) + DEC-006 waterfall
 - **From:** Implementer

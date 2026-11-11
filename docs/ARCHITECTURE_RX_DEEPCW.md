@@ -38,14 +38,15 @@ That pipeline (not the React UI) is what Ditonira must reimplement. Weights are 
 | Center frequency + bandwidth filter | Scope click/wheel + BANDWIDTH | RX controls + bandpass / shifted spectrogram |
 | Spectrogram / scope UI | `Scope.tsx` | **Required** live waterfall (Phase RX-2 / RX-2b) — operator debugging (§7.3) |
 | Streaming committed transcript | `useStreamingDecode.ts` | Phase RX-3 |
-| Pileup multi-signal (narrow model) | pileup hooks + `en_narrow` | Phase RX-4 (optional) |
+| Pileup multi-signal (narrow model) | pileup hooks + `en_narrow` | Phase RX-4 (shipped) |
+| Monitor / THRU output routing | `useFilteredPassthroughStream` + output device select | **DEC-010** — headphones / speaker routing (§7.4) |
 
 ### 1.2 Explicitly out of scope for this port
 
 - DeepCW **Web Serial keyer** / WPM TX UI (Ditonira already has RTS/DTR keyer).
 - **RTTY** / DeepRTTY.
 - **Japanese** model (`ja/…` referenced but **absent** in the analyzed checkout).
-- Marketing “deep-learning noise reduction” (**not implemented** in the web repo; THRU is classical bandpass).
+- Marketing “deep-learning noise reduction” (**not implemented** in the web repo; monitor filter is **classical bandpass only**, same as DeepCW THRU).
 - WASM / WebGPU backends (use native **ONNX Runtime CPU**).
 - PWA / Cloudflare / Mantine / React.
 - Benchmark panel (optional later; not required for RX MVP).
@@ -383,12 +384,13 @@ docs/
 | Bandwidth | 100 / 150 / 250 / 500 / 800 Hz |
 | Center frequency | Spin **and** waterfall interaction; clamp to decodable 400–1200 for wide model |
 | **Waterfall / spectrum** | **Required** — see §7.3 (debugging + tune aid) |
+| **Monitor / THRU** | **DEC-010** — see §7.4 (headphones / output routing) |
 | Decode text | Read-only `QPlainTextEdit` / label showing latest `plainText` |
 | Status | Ready / Listening / Decoding / Error (model load, device open) |
 
 ### 7.2 Strings (examples)
 
-`Start RX`, `Stop RX`, `Input:`, `Window:`, `Bandwidth:`, `Center Hz:`, `Decoded text`, `Listening…`, `Could not open audio device`, `Could not load CW model`, `RX paused while transmitting`.
+`Start RX`, `Stop RX`, `Input:`, `Window:`, `Bandwidth:`, `Center Hz:`, `Decoded text`, `Listening…`, `Could not open audio device`, `Could not load CW model`, `RX paused while transmitting`, `Monitor:`, `Output:`, `Enable monitor`, `Filtered (center/BW)`, `Could not open audio output`.
 
 ### 7.3 Waterfall / spectrum (required — debugging)
 
@@ -405,6 +407,27 @@ docs/
 7. **Fidelity:** pixel-perfect DeepCW `Scope.tsx` / AnalyserNode 4096 clone is **not** required; a clear, readable waterfall that supports the above is enough. Prefer magnitide dB-ish mapping with a simple colormap (e.g. dark→bright); avoid unreadable flat greyscale with no contrast.
 
 **Module:** `RxSpectrumWidget` inside `RxPanel`. Signal example: `DecodeEngine` or capture side emits `spectrumUpdated(freqs/mags or image strip)`; widget scrolls and overlays markers.
+
+### 7.4 Monitor / THRU — receive audio routing (DEC-010)
+
+**Goal (DeepCW “THRU”):** route the **same RX input** the decoder hears to a selectable **output** device (headphones/speakers) so the operator can listen while decoding. Useful for headphones and for confirming audio reach.
+
+**Reference:** `web-deep-cw-decoder` `useFilteredPassthroughStream.ts` + THRU output combo (`Decoder.tsx`). Filter = classical bandpass only (DeepCW does **not** ship neural NR here).
+
+**Behavior:**
+
+1. **Output device** combo + Refresh: PortAudio **output** devices, independent of RX **input**.
+2. **Enable monitor:** when on, a valid output is selected, and RX capture is running → play live RX audio to that output. Otherwise silence (no playback stream).
+3. **Filtered (recommended default when monitoring):** RBJ bandpass **4 passes**, Q = f₀/BW, using current **Center Hz** and **Bandwidth** (reuse `BandpassFilter`). Unchecked → unfiltered (bypass), matching DeepCW bypass vs filtered gains.
+4. **Latency:** full-duplex PortAudio or a dedicated output stream fed from the capture path; keep buffers short and stable; no Qt Multimedia detour.
+5. **Realtime (§10.1):** no heap/mutex in the PortAudio callback; preallocate bandpass state + output scratch. Decode/pileup remain on DecodeEngine.
+6. **TX pause:** mute/stop monitor whenever RX is paused for TX (feedback safety).
+7. **Offline / local only:** device routing; Pulse/PipeWire local sockets OK. No internet.
+8. **Pileup v1:** one input stream to one monitor output; filter uses Normal center/BW controls (no per-track mix).
+
+**Acceptance:** hear RX in headphones when enabled; filter tracks center/BW; disable → silence while decode continues; TX mutes monitor; no segfault; AppImage GLIBC/lean gates still PASS.
+
+**Modules:** extend `AudioCapture` (full-duplex) **or** add `AudioMonitor` under `RxPanel`.
 
 ---
 
@@ -450,7 +473,11 @@ Committed transcript with word-space logic; live tail remains.
 
 ### Phase RX-4 — Pileup + narrow model
 
-Only after RX-2 stable.
+Shipped (Tester PASS).
+
+### Phase RX-5 — Monitor / THRU output routing (DEC-010)
+
+Headphones/speaker routing per §7.4. Can proceed after RX-4.
 
 ---
 
@@ -461,14 +488,31 @@ GUI thread (MainWindow / RxPanel)
     │ start/stop, parameters, show text
     ▼
 DecodeEngine (QThread)
-    │ build spectrogram + ORT + CTC
+    │ STFT / ORT / CTC / pileup SNR+narrow (all heavy work HERE)
     ▲
-AudioCapture callback → AudioRingBuffer (lock-free preferred)
+AudioCapture PortAudio callback → lock-free / SPSC ring only
 ```
 
-- ORT + STFT **never** on GUI thread.
-- Signals: `decodedTextChanged(QString)`, `rxStatusChanged(QString)`, `spectrumUpdated(...)` (**required** for waterfall §7.3).
+- ORT + STFT + pileup detection/decode **never** on GUI thread and **never** inside the PortAudio callback.
+- Signals: `decodedTextChanged(QString)`, `rxStatusChanged(QString)`, `spectrumUpdated(...)` (**required** for waterfall §7.3); pileup track updates likewise queued to GUI.
 - Destroy session on thread shutdown; stop capture before joining.
+
+### 10.1 Audio capture hardiness (ENG-009 / DEC-009 — mandatory)
+
+Triggered by Tester: AppImage **segfault** during pileup / multi-tone RX (`tests/rx_wav/pileup_4track_multispeed.wav`). ALSA `dsnoop`/`dmix`/`Unknown PCM` lines from PortAudio device probe are **noise**, not the root cause to “fix” by ignoring alone.
+
+**Rules (Implementer must implement):**
+
+1. **PortAudio lifetime:** exactly one clear owner for `Pa_Initialize` / `Pa_Terminate` for the process (or refcounted singleton). `listInputDevices()` must **not** `Pa_Terminate()` while capture may be alive or while another caller expects PA initialized. No overlapping init/terminate races.
+2. **Realtime callback constraints:** the PortAudio callback may only:
+   - copy/convert samples into a **preallocated** buffer / lock-free ring (no `std::vector` growth, no `new`, no `QString`, no Qt signals directly);
+   - optional **preallocated** scratch for resample (fixed capacity; never heap-allocate per callback);
+   - **no mutex** that the decode thread can hold for long (no `appendStreamingAudio` taking a `QMutex` on the RT thread). Prefer SPSC ring; decode thread pulls.
+3. **Heavy work only on DecodeEngine thread:** pileup SNR over multi-second windows, narrow ORT × N tracks, streaming transcript commit — all off the callback. Under multi-tone load this path runs often; it must not share unsafe RT practices with Normal mode either (fix once for both modes).
+4. **Failure handling:** open/start capture failures → status string + stay alive (no crash). ORT failures → status/error signal, not process abort.
+5. **Verification:** reproduce with AppImage + pileup fixture; capture **gdb/coredump backtrace** before claiming fixed; re-run RX-4 Tester checklist without segfault. ALSA probe warnings may remain if harmless.
+
+Local audio IPC (Pulse/PipeWire sockets) remains allowed (§2.1 of main architecture).
 
 ---
 

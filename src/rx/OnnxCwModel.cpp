@@ -68,9 +68,11 @@ bool OnnxCwModel::run(const SpectrogramTensor &spectrogram, InferenceResult *out
     }
 
     try {
+        const int freqBins =
+            spectrogram.freqBins > 0 ? spectrogram.freqBins : kCroppedBins;
         const std::array<int64_t, 4> inputShape = {
             1, 1, static_cast<int64_t>(spectrogram.timeSteps),
-            static_cast<int64_t>(kCroppedBins)};
+            static_cast<int64_t>(freqBins)};
 
         Ort::MemoryInfo memoryInfo =
             Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);

@@ -49,4 +49,67 @@ std::vector<float> applyBandpassFilter(const float *audio, int length, int sampl
     return input;
 }
 
+void StreamingBandpass::reset()
+{
+    for (auto &s : m_sections) {
+        s.x1 = s.x2 = s.y1 = s.y2 = 0.f;
+    }
+    m_ready = false;
+}
+
+void StreamingBandpass::setParams(int sampleRate, float centerFreqHz, float bandwidthHz)
+{
+    if (sampleRate <= 0 || centerFreqHz <= 0.f || bandwidthHz <= 0.f) {
+        m_ready = false;
+        return;
+    }
+    const double q = static_cast<double>(centerFreqHz) / static_cast<double>(bandwidthHz);
+    const double omega = (2.0 * M_PI * centerFreqHz) / static_cast<double>(sampleRate);
+    const double sinOmega = std::sin(omega);
+    const double cosOmega = std::cos(omega);
+    const double alpha = sinOmega / (2.0 * q);
+
+    const double b0 = alpha;
+    const double b1 = 0.0;
+    const double b2 = -alpha;
+    const double a0 = 1.0 + alpha;
+    const double a1 = -2.0 * cosOmega;
+    const double a2 = 1.0 - alpha;
+
+    const float nb0 = static_cast<float>(b0 / a0);
+    const float nb1 = static_cast<float>(b1 / a0);
+    const float nb2 = static_cast<float>(b2 / a0);
+    const float na1 = static_cast<float>(a1 / a0);
+    const float na2 = static_cast<float>(a2 / a0);
+
+    for (auto &s : m_sections) {
+        s.b0 = nb0;
+        s.b1 = nb1;
+        s.b2 = nb2;
+        s.a1 = na1;
+        s.a2 = na2;
+        s.x1 = s.x2 = s.y1 = s.y2 = 0.f;
+    }
+    m_ready = true;
+}
+
+void StreamingBandpass::processInPlace(float *samples, int count)
+{
+    if (!m_ready || !samples || count <= 0) {
+        return;
+    }
+    for (auto &s : m_sections) {
+        for (int i = 0; i < count; ++i) {
+            const float x0 = samples[i];
+            const float y0 = s.b0 * x0 + s.b1 * s.x1 + s.b2 * s.x2 - s.a1 * s.y1 - s.a2 * s.y2;
+            samples[i] = y0;
+            s.x2 = s.x1;
+            s.x1 = x0;
+            s.y2 = s.y1;
+            s.y1 = y0;
+        }
+    }
+}
+
 } // namespace deepcw
+

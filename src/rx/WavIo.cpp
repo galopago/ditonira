@@ -157,6 +157,30 @@ bool readWavFile(const std::string &path, WavData *out, std::string *errorOut)
     return true;
 }
 
+int resampleLinearInto(const float *input, int inputLen, int inputRate, int targetRate,
+                       float *out, int outCapacity)
+{
+    if (!input || !out || inputLen <= 0 || inputRate <= 0 || targetRate <= 0 || outCapacity <= 0) {
+        return 0;
+    }
+    if (inputRate == targetRate) {
+        const int n = std::min(inputLen, outCapacity);
+        std::memcpy(out, input, static_cast<size_t>(n) * sizeof(float));
+        return n;
+    }
+    const double ratio = static_cast<double>(inputRate) / static_cast<double>(targetRate);
+    const int outLen = std::max(1, static_cast<int>(std::floor(inputLen / ratio)));
+    const int n = std::min(outLen, outCapacity);
+    for (int i = 0; i < n; ++i) {
+        const double src = i * ratio;
+        const int i0 = static_cast<int>(std::floor(src));
+        const int i1 = std::min(i0 + 1, inputLen - 1);
+        const float t = static_cast<float>(src - i0);
+        out[i] = input[i0] * (1.f - t) + input[i1] * t;
+    }
+    return n;
+}
+
 std::vector<float> resampleLinear(const float *input, int inputLen, int inputRate,
                                   int targetRate)
 {
@@ -169,13 +193,7 @@ std::vector<float> resampleLinear(const float *input, int inputLen, int inputRat
     const double ratio = static_cast<double>(inputRate) / static_cast<double>(targetRate);
     const int outLen = std::max(1, static_cast<int>(std::floor(inputLen / ratio)));
     std::vector<float> out(static_cast<size_t>(outLen));
-    for (int i = 0; i < outLen; ++i) {
-        const double src = i * ratio;
-        const int i0 = static_cast<int>(std::floor(src));
-        const int i1 = std::min(i0 + 1, inputLen - 1);
-        const float t = static_cast<float>(src - i0);
-        out[static_cast<size_t>(i)] = input[i0] * (1.f - t) + input[i1] * t;
-    }
+    resampleLinearInto(input, inputLen, inputRate, targetRate, out.data(), outLen);
     return out;
 }
 

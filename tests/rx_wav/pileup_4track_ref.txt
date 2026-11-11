@@ -1,0 +1,8 @@
+# Ditonira RX-4 pileup fixture reference
+# File: pileup_4track_multispeed.wav (48000 Hz mono, 36s, ~15 dB SNR)
+# Also: pileup_4track_multispeed_9600.wav (9600 Hz)
+
+500 Hz @ 15 WPM: CQ CQ DE W1AW W1AW K
+700 Hz @ 20 WPM: CQ DE N0CALL TEST K
+900 Hz @ 25 WPM: QRZ DE HA5BT HA5BT K
+1100 Hz @ 18 WPM: 5NN 599 TU DE K6XX

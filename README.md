@@ -6,6 +6,8 @@ Technical decisions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 **Language:** all project documentation (`README`, `docs/*`, Cursor rules) and **end-user UI strings** are **English**.
 
+**Offline:** Ditonira does **not** use the internet (no telemetry, no downloading fonts/models/updates). Everything needed ships inside the AppImage. Local desktop sockets (e.g. audio via Pulse/PipeWire, D-Bus) may still be used by the OS stack — that is not “going online.”
+
 ## Features (current)
 
 ### Transmit (shipped)
@@ -21,9 +23,9 @@ Technical decisions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - While transmitting: port, line, polarity, WPM, and Transmit are locked; the text box is read-only; **Stop (Esc)** stays enabled and leaves the key line key-up.
 - **AppImage** x86_64 distribution (Qt 5 bundled; no system Qt required on the host).
 
-### Receive (in progress — DeepCW port)
+### Receive (DeepCW port — shipped; Monitor awaiting Tester)
 
-Neural CW decode ported from [DeepCW](https://github.com/e04/web-deep-cw-decoder) (ONNX Conformer-CTC, 9600 Hz STFT pipeline). Live RX UI includes a **required waterfall** for tuning/debugging (center/bandwidth overlay). Architecture: [docs/ARCHITECTURE_RX_DEEPCW.md](docs/ARCHITECTURE_RX_DEEPCW.md) §7.3. Phases: DEC-005 / DEC-006.
+Neural CW decode ported from [DeepCW](https://github.com/e04/web-deep-cw-decoder) (ONNX Conformer-CTC, 9600 Hz STFT pipeline): live RX, waterfall, streaming transcript, pileup, and **Monitor/THRU** (RX → selectable output, optional center/BW bandpass — DEC-010 / §7.4). Architecture: [docs/ARCHITECTURE_RX_DEEPCW.md](docs/ARCHITECTURE_RX_DEEPCW.md).
 
 Supported characters: A–Z, 0–9, `= / ? . ,`, and spaces. Everything else is omitted (not keyed).
 
@@ -33,6 +35,8 @@ Not in the MVP: local sidetone, paddle/iambic, CW receive, macros, Windows/macOS
 
 | Item | What changed |
 |---|---|
+| ENG-010 | Monitor/THRU — route RX audio to headphones (DeepCW-style) |
+| ENG-007 | **P0** AppImage must be portable (Ubuntu 20.04 baseline; no host lib version hell) |
 | ENG-006 | RX **waterfall** required for debugging (DEC-006 / RX-2b) |
 | ENG-005 | Neural CW **receive** — DeepCW ONNX port (architecture + DEC-005; implementation phased) |
 | ENG-004 | Stop TX via **Esc**; button label **`Stop (Esc)`** |
@@ -87,20 +91,28 @@ sudo usermod -aG dialout "$USER"
 
 Log out and back in for the group membership to take effect.
 
-## AppImage (no system Qt required on the host)
+## AppImage (what you run on any Linux PC)
 
-Produces a self-contained x86_64 binary that embeds Qt 5. Prefer a clean tree first (see Build and run), then:
+**You (end user):** no Docker, no compile, no package installs for Qt/ORT/ICU.
 
 ```bash
-./packaging/build-appimage.sh
-./dist/Ditonira-x86_64.AppImage
+chmod +x Ditonira-x86_64.AppImage
+./Ditonira-x86_64.AppImage
 ```
 
-Script requirements: `curl`, `cmake`, Qt5 build toolchain, and FUSE or `--appimage-extract` support (the script falls back).
+The AppImage embeds Qt 5, ICU (as needed), ONNX Runtime, and the CW model. The host only needs a normal desktop + audio (e.g. ALSA) and serial permission (`dialout`) — not matching library versions from apt.
 
-For best compatibility with older distros, build the AppImage on **Ubuntu 20.04** (older glibc). The AppImage embeds Qt libraries; it does not replace the host glibc.
+See `docs/ARCHITECTURE.md` §8.0.
 
-After rebuilding the app, do not launch an old AppImage left under `dist/` — rebuild it or run `./build/ditonira`.
+### Packaging notes (developers / Implementer only — not for end users)
+
+To **produce** the portable AppImage (Ubuntu 20.04 / glibc 2.31 baseline):
+
+```bash
+./packaging/build-appimage-docker.sh
+```
+
+That script builds inside an `ubuntu:20.04` container (Docker or Podman on the Implementer machine), runs the **GLIBC ≤ 2.31** gate and the **lean/offline** gate (no Network/CUPS/TLS/QML leftovers; local audio/D-Bus IPC kept), and writes `dist/Ditonira-x86_64.AppImage`. Do **not** ship an AppImage built only on a bleeding-edge host if it requires `GLIBC_2.34+`. Local `build/ditonira` on a newer machine remains fine for day-to-day development.
 
 ## Development docs
 

@@ -1,0 +1,32 @@
+---
+description: Ditonira is offline-only and lean — no network, telemetry, downloads, or unused libs
+alwaysApply: true
+---
+
+# Offline-only + lean (HARD)
+
+Source: `docs/ARCHITECTURE.md` §2.1 and §8.0.5.
+
+## Product
+
+- Ditonira is **not** an internet app: no remote HTTP, no telemetry, no runtime downloads, no cloud/login.
+- CW model and resources ship **inside** the AppImage — never downloaded.
+
+## Local sockets are OK (do not ban blindly)
+
+- **Allowed:** Unix-domain / local IPC that desktop stacks need while staying offline — e.g. PulseAudio/PipeWire, D-Bus, `$XDG_RUNTIME_DIR` sockets.
+- **Forbidden:** using that as a loophole for remote network or internet features.
+- Stripping “anything that says socket” can **break audio or GUI**. Strip Qt Network/CUPS/TLS bloat; keep local host IPC.
+
+## Packaging / code
+
+- **Do not add** unused Qt modules (no Network/PrintSupport “just in case”).
+- Link only **Qt Core/Gui/Widgets/SerialPort** (+ PortAudio/ORT as architected).
+- After linuxdeploy: strip Network/bearer/PrintSupport/CUPS/TLS leftovers unless `DT_NEEDED` — prefer **zero** for those families.
+- If unsure → HANDOFF **For Architect**.
+
+## Never tell the user
+
+- That they need internet, online certs, CUPS, or downloadable fonts for Ditonira.
+---
+

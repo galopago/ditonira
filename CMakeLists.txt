@@ -73,12 +73,20 @@ set(DITONIRA_RX_SOURCES
   src/rx/DeepCwConstants.h
   src/rx/AudioRingBuffer.cpp
   src/rx/AudioRingBuffer.h
+  src/rx/PortAudioHost.cpp
+  src/rx/PortAudioHost.h
   src/rx/AudioCapture.cpp
   src/rx/AudioCapture.h
+  src/rx/MonitorFifo.cpp
+  src/rx/MonitorFifo.h
+  src/rx/AudioMonitor.cpp
+  src/rx/AudioMonitor.h
   src/rx/DecodeEngine.cpp
   src/rx/DecodeEngine.h
   src/rx/StreamingTranscript.cpp
   src/rx/StreamingTranscript.h
+  src/rx/PileupTracker.cpp
+  src/rx/PileupTracker.h
   src/rx/ModelPath.cpp
   src/rx/ModelPath.h
   src/rx/RxPanel.cpp
@@ -129,6 +137,11 @@ add_executable(deepcw_wav_decode
 )
 target_link_libraries(deepcw_wav_decode PRIVATE ditonira_rx)
 
+add_executable(pileup_wav_smoke
+  tools/pileup_wav_smoke.cpp
+)
+target_link_libraries(pileup_wav_smoke PRIVATE ditonira_rx)
+
 set(_RPATH_LIBS "$ORIGIN/../lib;${ONNXRUNTIME_ROOT}/lib")
 set_target_properties(ditonira PROPERTIES
   INSTALL_RPATH "$ORIGIN/../lib"
@@ -139,13 +152,20 @@ set_target_properties(deepcw_wav_decode PROPERTIES
   BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib"
   INSTALL_RPATH "$ORIGIN/../lib"
 )
+set_target_properties(pileup_wav_smoke PROPERTIES
+  BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib"
+  INSTALL_RPATH "$ORIGIN/../lib"
+)
 
 include(GNUInstallDirs)
 install(TARGETS ditonira RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(TARGETS deepcw_wav_decode RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES resources/ditonira.desktop DESTINATION share/applications)
 install(FILES resources/icons/ditonira.png DESTINATION share/icons/hicolor/256x256/apps)
-install(FILES resources/models/deepcw_en.onnx resources/models/NOTICE.txt
+install(FILES
+          resources/models/deepcw_en.onnx
+          resources/models/deepcw_en_narrow.onnx
+          resources/models/NOTICE.txt
         DESTINATION share/ditonira/models)
 install(FILES "${ONNXRUNTIME_ROOT}/lib/libonnxruntime.so.1.19.2"
         DESTINATION ${CMAKE_INSTALL_LIBDIR})

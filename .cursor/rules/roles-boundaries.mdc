@@ -16,6 +16,7 @@ Read `docs/ARCHITECTURE.md` §11–12 and the active inbox in `docs/HANDOFF.md` 
 - Do not cross roles “just to finish faster.”
 - Persist decisions in `HANDOFF.md` / `ENGINEERING_LOG.md`; chat history alone is not enough.
 - **English only** for documentation (`README.md`, `docs/*`, Cursor rules, handoffs, engineering log), code comments, identifiers, **and end-user UI strings**. Never author new docs or UI copy in Spanish.
+- Ditonira is **offline-only** and **lean** (`ARCHITECTURE.md` §2.1): no telemetry, no runtime downloads, no unused network/print/TLS stacks.
 - If architecture is missing or conflicting: Implementer/Tester ask in HANDOFF → Architect decides → Implementer codes.
 ---
 

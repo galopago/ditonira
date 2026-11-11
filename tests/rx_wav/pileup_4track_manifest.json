@@ -1,0 +1,45 @@
+{
+  "purpose": "RX-4 pileup multi-signal fixture (DEC-005 Tester)",
+  "architecture": "ARCHITECTURE_RX_DEEPCW.md \u00a75.3",
+  "files": {
+    "mix_48k": "pileup_4track_multispeed.wav",
+    "mix_9600": "pileup_4track_multispeed_9600.wav"
+  },
+  "sample_rate_hz_primary": 48000,
+  "duration_s": 36.0,
+  "channel_snr_db_approx": 15.0,
+  "tracks": [
+    {
+      "id": 1,
+      "freq_hz": 500,
+      "wpm": 15,
+      "ref_text": "CQ CQ DE W1AW W1AW K",
+      "start_delay_s": 0.0,
+      "amplitude": 0.24
+    },
+    {
+      "id": 2,
+      "freq_hz": 700,
+      "wpm": 20,
+      "ref_text": "CQ DE N0CALL TEST K",
+      "start_delay_s": 0.35,
+      "amplitude": 0.22
+    },
+    {
+      "id": 3,
+      "freq_hz": 900,
+      "wpm": 25,
+      "ref_text": "QRZ DE HA5BT HA5BT K",
+      "start_delay_s": 0.7,
+      "amplitude": 0.21
+    },
+    {
+      "id": 4,
+      "freq_hz": 1100,
+      "wpm": 18,
+      "ref_text": "5NN 599 TU DE K6XX",
+      "start_delay_s": 1.1,
+      "amplitude": 0.2
+    }
+  ]
+}

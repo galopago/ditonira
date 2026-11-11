@@ -19,6 +19,7 @@ public:
 
     void setCenterHz(int hz);
     void setBandwidthHz(int hz);
+    void setPileupMarkers(const QVector<int> &frequenciesHz);
     void clearWaterfall();
 
 public slots:
@@ -46,6 +47,7 @@ private:
     QImage m_image;
     int m_centerHz = 800;
     int m_bandwidthHz = 800;
+    QVector<int> m_pileupMarkersHz;
     float m_smoothMax = 1e-3f;
 
     static constexpr int kMinHz = 100;

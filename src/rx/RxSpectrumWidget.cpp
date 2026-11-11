@@ -40,12 +40,22 @@ void RxSpectrumWidget::setBandwidthHz(int hz)
     update();
 }
 
+void RxSpectrumWidget::setPileupMarkers(const QVector<int> &frequenciesHz)
+{
+    if (m_pileupMarkersHz == frequenciesHz) {
+        return;
+    }
+    m_pileupMarkersHz = frequenciesHz;
+    update();
+}
+
 void RxSpectrumWidget::clearWaterfall()
 {
     if (!m_image.isNull()) {
         m_image.fill(QColor(8, 10, 18));
     }
     m_smoothMax = 1e-3f;
+    m_pileupMarkersHz.clear();
     update();
 }
 
@@ -245,6 +255,16 @@ void RxSpectrumWidget::paintEvent(QPaintEvent *)
     p.setPen(QPen(QColor(255, 220, 80), 1, Qt::DashLine));
     const int yC = hzToY(m_centerHz);
     p.drawLine(pr.left(), yC, pr.right(), yC);
+
+    // Locked pileup tracks (cyan).
+    p.setPen(QPen(QColor(80, 255, 220), 1));
+    for (int hz : m_pileupMarkersHz) {
+        if (hz < kMinHz || hz > kMaxHz) {
+            continue;
+        }
+        const int y = hzToY(hz);
+        p.drawLine(pr.left(), y, pr.right(), y);
+    }
 
     p.setPen(QColor(100, 110, 130));
     p.drawRect(pr.adjusted(0, 0, -1, -1));

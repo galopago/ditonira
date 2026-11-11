@@ -32,6 +32,22 @@ constexpr int kNormalCenterBin = 64;              // round((32+97-1)/2)
 constexpr int kTotalBins = kFftLength / 2 + 1;    // 385
 
 constexpr int kNarrowShiftBins = 3;
+constexpr int kNarrowCenterIdx = kNarrowShiftBins / 2; // 1
+
+constexpr int kCwDetectHopLength = 192;
+
+// Pileup (ARCHITECTURE_RX_DEEPCW.md §5.3 / web const.ts)
+constexpr double kPileupFilterWidthHz = kBinResolution * 4.0; // 50
+constexpr int kPileupWindowS = 8;
+constexpr int kPileupMinFreqHz = 100;
+constexpr int kPileupMaxFreqHz = 2000;
+constexpr int kPileupMaxPeaks = 5;
+constexpr double kPileupMatchHz = kBinResolution * 1.2; // 15
+constexpr double kPileupLockSnrThresholdDb = 12.0;
+constexpr double kPileupReleaseSnrThresholdDb = 9.0;
+constexpr int kPileupTextHoldMs = 1500;
+constexpr int kPileupConfirmMs = 400;
+constexpr int kPileupHoldMs = 5000;
 
 constexpr int kDefaultDecodeWindowS = 12;
 

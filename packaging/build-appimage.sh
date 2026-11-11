@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build a self-contained Ditonira-x86_64.AppImage (bundles Qt5).
-# Prefer building on Ubuntu 20.04 (or older glibc) for wider host compatibility.
+# Prefer the Ubuntu 20.04 factory (build-appimage-docker.sh) for shipping artifacts.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,6 +30,7 @@ download() {
 
 LINUXDEPLOY="${TOOLS}/linuxdeploy-x86_64.AppImage"
 LINUXDEPLOY_QT="${TOOLS}/linuxdeploy-plugin-qt-x86_64.AppImage"
+APPIMAGETOOL="${TOOLS}/appimagetool-x86_64.AppImage"
 
 download \
   "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage" \
@@ -37,6 +38,9 @@ download \
 download \
   "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage" \
   "${LINUXDEPLOY_QT}"
+download \
+  "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" \
+  "${APPIMAGETOOL}"
 
 echo "Configuring Release build…"
 cmake -S "${ROOT}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
@@ -54,6 +58,7 @@ if [[ -f "${ORT_ROOT}/lib/libonnxruntime.so.1.19.2" ]]; then
   ln -sfn libonnxruntime.so.1 "${APPDIR}/usr/lib/libonnxruntime.so"
 fi
 cp -f "${ROOT}/resources/models/deepcw_en.onnx" "${APPDIR}/usr/share/ditonira/models/" 2>/dev/null || true
+cp -f "${ROOT}/resources/models/deepcw_en_narrow.onnx" "${APPDIR}/usr/share/ditonira/models/" 2>/dev/null || true
 cp -f "${ROOT}/resources/models/NOTICE.txt" "${APPDIR}/usr/share/ditonira/models/" 2>/dev/null || true
 
 # AppImage expects icon name matching desktop Icon= without extension under usr/share/icons
@@ -71,6 +76,8 @@ fi
 
 export LDAI_OUTPUT="${DIST}/Ditonira-x86_64.AppImage"
 export LINUXDEPLOY_OUTPUT_VERSION="${LINUXDEPLOY_OUTPUT_VERSION:-0.1.0}"
+export VERSION="${LINUXDEPLOY_OUTPUT_VERSION}"
+export APPIMAGE_EXTRACT_AND_RUN="${APPIMAGE_EXTRACT_AND_RUN:-1}"
 
 # Extraneous AppImage FUSE often fails in CI/containers; extract and run if needed.
 run_tool() {
@@ -88,33 +95,41 @@ run_tool() {
   rm -rf "${extract_dir}"
 }
 
-echo "Bundling Qt and creating AppImage…"
+echo "Bundling Qt into AppDir (no AppImage yet)…"
 run_tool "${LINUXDEPLOY}" \
   --appdir "${APPDIR}" \
   --executable "${APPDIR}/usr/bin/ditonira" \
   --desktop-file "${APPDIR}/usr/share/applications/ditonira.desktop" \
   --icon-file "${APPDIR}/usr/share/icons/hicolor/256x256/apps/ditonira.png" \
   --plugin qt \
-  --output appimage
+  --exclude-library 'libQt5Network.so*' \
+  --exclude-library 'libQt5PrintSupport.so*' \
+  --exclude-library 'libcups.so*' \
+  --exclude-library 'libssl.so*' \
+  --exclude-library 'libcrypto.so*' \
+  --exclude-library 'libnss3.so*' \
+  --exclude-library 'libgnutls.so*'
 
-# linuxdeploy may write the AppImage in cwd; move if needed
-if [[ ! -f "${LDAI_OUTPUT}" ]]; then
-  found="$(find "${ROOT}" -maxdepth 2 -name 'Ditonira*.AppImage' -o -name 'ditonira*.AppImage' | head -n1 || true)"
-  if [[ -n "${found}" ]]; then
-    mv -f "${found}" "${LDAI_OUTPUT}"
-  fi
-fi
+# §8.0.5: strip leftovers linuxdeploy/qt plugin may still copy.
+"${ROOT}/packaging/strip-lean-appdir.sh" "${APPDIR}"
 
-# Ensure output lands in dist/
+echo "Packing AppImage with appimagetool…"
+rm -f "${LDAI_OUTPUT}"
+run_tool "${APPIMAGETOOL}" "${APPDIR}" "${LDAI_OUTPUT}"
+
+# appimagetool may write next to AppDir or cwd; normalize into dist/
 shopt -s nullglob
-for f in "${ROOT}"/Ditonira*.AppImage "${ROOT}"/ditonira*.AppImage "${BUILD_DIR}"/Ditonira*.AppImage; do
-  mv -f "${f}" "${DIST}/Ditonira-x86_64.AppImage"
+for f in "${ROOT}"/Ditonira*.AppImage "${ROOT}"/ditonira*.AppImage \
+         "${BUILD_DIR}"/Ditonira*.AppImage "${APPDIR}"/../Ditonira*.AppImage; do
+  [[ -f "${f}" ]] || continue
+  [[ "${f}" -ef "${LDAI_OUTPUT}" ]] && continue
+  mv -f "${f}" "${LDAI_OUTPUT}"
 done
 shopt -u nullglob
 
-if [[ -f "${DIST}/Ditonira-x86_64.AppImage" ]]; then
-  chmod +x "${DIST}/Ditonira-x86_64.AppImage"
-  echo "OK: ${DIST}/Ditonira-x86_64.AppImage"
+if [[ -f "${LDAI_OUTPUT}" ]]; then
+  chmod +x "${LDAI_OUTPUT}"
+  echo "OK: ${LDAI_OUTPUT}"
 else
   echo "AppImage was not produced." >&2
   exit 1

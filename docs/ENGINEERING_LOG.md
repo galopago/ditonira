@@ -11,8 +11,12 @@ Language: English (see [ARCHITECTURE.md](ARCHITECTURE.md) language convention).
 
 | ID | Date | Type | Title | Status |
 |---|---|---|---|---|
+| ENG-010 | 2026-11-10 | Improvement | Monitor/THRU RX audio routing to headphones | In progress |
+| ENG-009 | 2026-11-10 | Bug | AppImage segfault on pileup / multi-tone RX test | Resolved |
+| ENG-008 | 2026-11-10 | Improvement | Exclude HTTP/CUPS/TLS bloat from AppImage | Resolved |
+| ENG-007 | 2026-11-10 | Bug | AppImage not portable — host glibc/lib version deps | Resolved |
 | ENG-006 | 2026-11-09 | Improvement | RX waterfall required for debugging | Resolved |
-| ENG-005 | 2026-11-09 | Improvement | Neural CW receive — DeepCW ONNX port | In progress |
+| ENG-005 | 2026-11-09 | Improvement | Neural CW receive — DeepCW ONNX port | Resolved |
 | ENG-004 | 2026-11-08 | Improvement | Stop TX via Esc; button label Stop (Esc) | Resolved |
 | ENG-003 | 2026-11-08 | Improvement | Always clean-rebuild; delete stale binaries/AppImages | Resolved |
 | ENG-002 | 2026-11-08 | Improvement | TX progress: color already-transmitted text | Resolved |
@@ -24,6 +28,55 @@ Language: English (see [ARCHITECTURE.md](ARCHITECTURE.md) language convention).
 ---
 
 ## Entries
+
+### ENG-010 — Monitor/THRU RX audio routing to headphones
+- **Date opened:** 2026-11-10
+- **Type:** Improvement
+- **Status:** In progress
+- **Reported by:** Human (via Architect)
+- **Symptoms / goal:** Like DeepCW THRU — select an audio **output** and route the received RX signal there (headphones), with optional bandpass matching Center/BW for listening while decoding.
+- **Evidence:** Product request; DeepCW `useFilteredPassthroughStream.ts`; normative `ARCHITECTURE_RX_DEEPCW.md` §7.4; DEC-010.
+- **Handoff:** DEC-010 Done by Implementer; For Tester verify §7.4.
+- **Resolution:**
+  - Implementer (2026-11-10): `MonitorFifo` + `AudioMonitor` (PortAudio out) + `StreamingBandpass`; `AudioCapture` mirrors 9600 Hz to fifo; `RxPanel` Output / Enable monitor / Filtered; TX mute. Factory AppImage rebuilt. Awaiting Tester PASS.
+
+### ENG-009 — AppImage segfault on pileup / multi-tone RX test
+- **Date opened:** 2026-11-10
+- **Type:** Bug
+- **Status:** Resolved
+- **Reported by:** Tester (Human field)
+- **Symptoms / goal:** `./dist/Ditonira-x86_64.AppImage` exits with **Segmentation fault** while Tester attempts multi-tone / Pileup verification (fixture `tests/rx_wav/pileup_4track_multispeed.wav`). Log shows ALSA `dsnoop`/`dmix`/`Unknown PCM` messages from PortAudio probe, then crash.
+- **Evidence:** User terminal log (ALSA lines + `Segmentation fault (core dumped)`). Code inspection: `AudioCapture` PA lifetime + RT callback work; `DecodeEngine::runPileupTick` heavy path. AppImage links **host** `libasound.so.2`. No gdb backtrace yet on Tester host.
+- **Handoff:** Tester → Architect (concepts) → **DEC-009** For Implementer; RX-4 Tester blocked until fixed.
+- **Architect decision (2026-11-10):** Hardening mandated in `ARCHITECTURE_RX_DEEPCW.md` §10.1 — PA lifecycle, realtime-safe callback (no heap/mutex), heavy work only on DecodeEngine; ALSA lines = red herring; require backtrace + no-segfault retest with pileup fixture.
+- **Resolution:**
+  - Implementer (2026-11-10): **Primary crash** reproduced offline with ASan on `pileup_wav_smoke` + `pileup_4track_multispeed_9600.wav`: SEGV in `PileupTracker::update` via `std::vector<bool>` matched flags while growing `m_tracked`. Fixed (`vector<char>` + deferred inserts). Also implemented §10.1: `PortAudioHost`, lock-free ring, RT-safe resample scratch, decode-thread `consumeNew` (removed PA streaming tap). Post-fix smoke exit 0. Factory AppImage rebuilt.
+  - Tester (2026-11-10): Live Pileup + `pileup_4track_multispeed.wav` — **no segfault**; UI stays Listening. Locked ~500/700/900/1100 Hz (+ spurious **162 Hz** empty). Decode fragments vs REF (not exact): 500→`TAW K CQ CT`; 700→`SE NOCALL TEST K`; 900→`T5BT HA5BT K QRZ N`; 1100→`5NN 599 TU D`. Human/Tester accepts quality as relatively functional for now. **ENG-009 Resolved.**
+
+### ENG-008 — Offline-only lean surface (no HTTP/CUPS/TLS/telemetry/downloads)
+- **Date opened:** 2026-11-10
+- **Type:** Improvement
+- **Status:** Resolved
+- **Reported by:** Human (via Architect)
+- **Symptoms / goal:** App must stay **fine/lean**: no libs or features it does not need. **No internet** — no telemetry, no downloading fonts/models/updates, no HTTP/CUPS/certs bloat. Graphics/local audio OK. **Local sockets** (Pulse/PipeWire/D-Bus/Unix IPC) explicitly **allowed** when the desktop stack needs them — not the same as going online.
+- **Evidence:** Human mandate 2026-11-10 (+ local-socket clarification); `ARCHITECTURE.md` §2.1 + §8.0.5; `implementer-offline-lean.mdc`; DEC-008.
+- **Handoff:** DEC-008 in `HANDOFF.md`.
+- **Resolution:**
+  - Implementer (2026-11-10): Source/CMake audit clean (no Network/telemetry). Added `packaging/strip-lean-appdir.sh` + `check-appimage-lean.sh`; `build-appimage.sh` excludes Network/Print/CUPS/TLS then strips plugin leftovers before `appimagetool`. Factory rebuild: **Lean gate PASS** (local D-Bus/audio IPC retained). Fresh `dist/Ditonira-x86_64.AppImage`.
+  - Tester (2026-11-10): Second Linux smoke with host **offline** — app ran without asking for internet/certs/CUPS; packaging lean requirement accepted. ENG-008 Resolved.
+
+### ENG-007 — AppImage not portable — host glibc/lib version deps
+- **Date opened:** 2026-11-10
+- **Type:** Bug
+- **Status:** Resolved
+- **Reported by:** Human (via Architect)
+- **Symptoms / goal:** AppImage fails on another Linux distro/version, demanding other library versions. Product requirement from day one: self-contained AppImage, no host install of app stack.
+- **Evidence:** Architect check of current `dist/Ditonira-x86_64.AppImage`: `ditonira` needs **`GLIBC_2.34`** (Ubuntu 22.04-class). Built on a newer host than the portability baseline. ICU/Qt/ORT are bundled, but **glibc cannot be bundled** — build baseline was wrong. User confirmation: break on second PC.
+- **Handoff:** DEC-007; policy `ARCHITECTURE.md` §8.0 (hard). Fix: Implementer **factory** rebuild with glibc ≤ 2.31 baseline so the **user** only runs the AppImage (no Docker/old-PC instructions to the human).
+- **Clarification (2026-11-10):** User rejected being told to use Docker or compile on an older PC — correctly; that was never the product. Those are internal build-factory means only.
+- **Resolution:**
+  - Implementer (2026-11-10): Factory `packaging/Dockerfile` + `build-appimage-docker.sh` + `factory-build.sh` + `check-appimage-glibc.sh`. Shipping AppImage rebuilt on `ubuntu:20.04`. **GLIBC gate PASS** (newest on binary **2.29** ≤ 2.31). File: `dist/Ditonira-x86_64.AppImage`. README: user = chmod/run only.
+  - Tester (2026-11-10): Second Linux — AppImage starts with no GLIBC/missing-lib errors; TX port list + keying OK; waterfall + partial RX decode (mic path weaker than primary PC). **ENG-007 Resolved.**
 
 ### ENG-006 — RX waterfall required for debugging
 - **Date opened:** 2026-11-09
@@ -40,7 +93,7 @@ Language: English (see [ARCHITECTURE.md](ARCHITECTURE.md) language convention).
 ### ENG-005 — Neural CW receive — DeepCW ONNX port
 - **Date opened:** 2026-11-09
 - **Type:** Improvement
-- **Status:** In progress
+- **Status:** Resolved
 - **Reported by:** Human (via Architect)
 - **Symptoms / goal:** Port the DeepCW web decoder’s real-time neural CW receive into Ditonira (Qt/C++/AppImage), matching the reference pipeline in `/home/libertad/Desktop/repos/web-deep-cw-decoder`.
 - **Evidence:** Architect deep analysis; normative spec `docs/ARCHITECTURE_RX_DEEPCW.md`; handoff DEC-005.
@@ -57,8 +110,10 @@ Language: English (see [ARCHITECTURE.md](ARCHITECTURE.md) language convention).
   - Implementer (2026-11-09) **Phase RX-2 partial:** PortAudio capture + ring buffer + `DecodeEngine` QThread + `RxPanel` in MainWindow splitter; pause RX during TX; AppImage ships `deepcw_en.onnx` + ORT. Waterfall was optional at the time; Architect later made it required (ENG-006 / DEC-006 / RX-2b). Full RX-2 PASS gated on waterfall.
   - **Human field test (2026-11-09) — live RX acoustic robustness:** Morse audio generated from a **phone ~1 m** from the PC; capture via **camera microphone**. Operator **talked over** the Morse tone during the session; Ditonira still **decoded successfully**. Waterfall **appeared to work visually** (see ENG-006).
   - Tester (2026-11-09) **Phase RX-2 + waterfall PASS:** Formal checklist items 1–6 OK (tune sync, Stop, overlays, TX↔RX pause/resume, TX regression, controls). **Green-light Phase RX-3** on DEC-005. ENG-005 remains In progress until RX-3/RX-4 complete.
-  - Implementer (2026-11-09) **Phase RX-3 done (awaiting Tester):** `StreamingTranscript` ports `useStreamingDecode.ts` EN commit semantics (min ~2 s pending/confirmed, ~1.25 s tail guard, ~30 s segment, ≥~1 s analysis). CTC `wordSpaceSpans`/`characterSpans`; capture sample tap → streaming buffer; `DecodeEngine::transcriptUpdated`; RxPanel **Transcript** + **Live tail**. Center/BW retune clears pending only. Clean paths: `build/ditonira`, `dist/Ditonira-x86_64.AppImage`. RX-4 still gated on RX-3 Tester PASS.
-
+  - Implementer (2026-11-09) **Phase RX-3 done (awaiting Tester):** `StreamingTranscript` ports `useStreamingDecode.ts` EN commit semantics (min ~2 s pending/confirmed, ~1.25 s tail guard, ~30 s segment, ≥~1 s analysis). CTC `wordSpaceSpans`/`characterSpans`; capture sample tap → streaming buffer; `DecodeEngine::transcriptUpdated`; RxPanel **Transcript** + **Live tail**. Center/BW retune clears pending only. Clean paths: `build/ditonira`, `dist/Ditonira-x86_64.AppImage`.
+  - Tester (2026-11-10) **Phase RX-3 PASS:** Checklist B1–B6 OK (commit/live-tail lifecycle, retune, session clear, TX pause/resume, waterfall/Esc smoke). **Green-light Phase RX-4** on DEC-005. ENG-005 remains In progress until RX-4 complete.
+  - Implementer (2026-11-10) **Phase RX-4 done (awaiting Tester):** `PileupTracker` + `estimateCwBinSnr` / narrow spectrogram; `DecodeEngine` Mode Normal|Pileup; UI Mode combo + Pileup tracks + waterfall markers; ships `deepcw_en_narrow.onnx`. Factory paths `build/ditonira`, `dist/Ditonira-x86_64.AppImage`.
+  - Tester (2026-11-10) **Phase RX-4 PASS:** Multi-tone fixture locks correct Hz bands with cyan markers; no segfault after DEC-009; decode quality partial but **accepted as relatively functional**. Residual ~162 Hz false lock / imperfect CER documented, not blocking. **ENG-005 Resolved** (RX-1…RX-4 complete).
 
 ### ENG-004 — Stop TX via Esc; button label Stop (Esc)
 - **Date opened:** 2026-11-08

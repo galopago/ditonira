@@ -28,7 +28,7 @@ copies or substantial portions of the Software.
 - Copyright © Microsoft Corporation
 - License: **MIT**
 - Upstream: https://github.com/microsoft/onnxruntime
-- Use in Ditonira: CPU inference for `deepcw_en.onnx` (bundled shared libraries in AppImage / `.deps` for local builds).
+- Use in Ditonira: CPU inference for `deepcw_en.onnx` and `deepcw_en_narrow.onnx` (bundled shared libraries in AppImage / `.deps` for local builds).
 
 ## PortAudio
 
@@ -47,5 +47,6 @@ copies or substantial portions of the Software.
 | File | SHA-256 |
 |---|---|
 | `resources/models/deepcw_en.onnx` | `cd5ee38106348ad86a8f2d40ef1ce7dccea0d7f7fbfd0f2dee0fd1a8a28773ae` |
+| `resources/models/deepcw_en_narrow.onnx` | `fc80c4baec72d756af1dbce9b70357a731b0b1a6b8306815bcfc61b6403c46e5` |
 
-Original UUID name: `39578E22-27CE-4AFB-989F-450345767A53` (DeepCW `public/models/en/`).
+Original UUID names: `39578E22-…` (wide `public/models/en/`), `4C1FFB1B-…` (narrow `public/models/en_narrow/`).

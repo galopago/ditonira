@@ -6,9 +6,14 @@
 namespace deepcw {
 
 struct SpectrogramTensor {
-    std::vector<float> data; // row-major T * 65
+    std::vector<float> data; // row-major T * freqBins
     int timeSteps = 0;
-    // ORT dims [1, 1, T, 65]
+    int freqBins = 65; // 65 wide EN, 3 narrow EN
+};
+
+struct CwBinSnrEstimate {
+    std::vector<float> frequenciesHz;
+    std::vector<float> snrDb;
 };
 
 /**
@@ -18,6 +23,15 @@ struct SpectrogramTensor {
 std::optional<SpectrogramTensor> audioToSpectrogramTensor(const float *audio, int length,
                                                           float filterFreqHz = -1.f,
                                                           float filterWidthHz = 0.f);
+
+/// Narrow EN pileup path — shape [1,1,T,3] (§4.8).
+std::optional<SpectrogramTensor> audioToNarrowShiftedSpectrogramTensor(const float *audio,
+                                                                       int length,
+                                                                       float targetFreqHz);
+
+/// Per-bin CW SNR for pileup detection (§5.3 / estimateCwBinSnr).
+std::optional<CwBinSnrEstimate> estimateCwBinSnr(const float *audio, int length, float minFreqHz,
+                                                 float maxFreqHz);
 
 void normalizeSpectrogramNoiseLog1p(std::vector<float> &spectrogram,
                                     const std::vector<float> *noiseSource = nullptr);

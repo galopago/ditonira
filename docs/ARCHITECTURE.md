@@ -51,11 +51,44 @@ Linux GUI application for amateur CW:
 | RX inference | ONNX Runtime C++ (CPU EP) | Same models as DeepCW; no WASM |
 | RX audio | PortAudio or Qt5 audio + resample to 9600 Hz | Match DeepCW capture rate |
 | Build | CMake ≥ 3.16 | Standard `find_package(Qt5 …)` + ORT |
-| Distribution | AppImage x86_64 | End user needs no system Qt; bundle ORT + ONNX weights |
+| Distribution | **Self-contained** AppImage x86_64 | End user installs **no** app packages (no Qt/ORT/ICU apt); see **§8 (hard)** |
 
 If `find_package(Qt5SerialPort)` fails but the runtime `.so` is present, CMake may use headers extracted under `.deps/qt5serialport-dev` (local dev only; the AppImage still bundles the library). Prefer installing `libqt5serialport5-dev` on the build host.
 
-**Qt 6 is not used** in the MVP: higher glibc/ABI risk on older hosts.
+**Qt 6 is not used:** higher glibc/ABI risk on older hosts.
+
+**Product non‑negotiable (from day one):** Ditonira is distributed so a user on **another Linux distro/version** can run the AppImage **without installing matching library versions**. Building on a bleeding-edge host and shipping that binary is a **defect**, not “good enough.”
+
+### 2.1 Offline-only + lean surface (HARD — Architect-defined)
+
+Ditonira is an **offline** amateur-radio tool (local serial TX + local audio RX + local ONNX model). As a **product**, it must **not** use the **internet** or talk to remote hosts (no cloud, no downloads, no telemetry).
+
+**Careful distinction — local IPC is not “going online”:**
+
+Linux desktops often need **local** sockets / buses for normal offline operation. Those are **allowed** when required by Qt, audio, or the display stack. Do **not** strip or ban them blindly.
+
+| Allowed local mechanisms (examples) | Why they may appear |
+|---|---|
+| Unix domain sockets (`AF_UNIX`) | PulseAudio / PipeWire client, other local audio |
+| D-Bus (session/system, local) | Qt platform / desktop integration on some hosts |
+| Abstract or filesystem socket paths under `/run`, `/tmp`, `$XDG_RUNTIME_DIR` | Same — local only |
+| Local loopback used *only* by a host service the OS already runs | Still not our app “calling the internet” |
+
+**FORBIDDEN (remote / internet product behavior):**
+
+| Forbidden | Examples |
+|---|---|
+| Remote network clients/servers | HTTP/HTTPS to the internet, WebSocket to remote hosts, FTP, intentional DNS for app features, “phone home” |
+| Telemetry / analytics / crash-upload | Sentry, Google Analytics, custom beacons, usage ping |
+| Online downloads at runtime | Fonts, models, updates, dictionaries, icons, “fetch assets on first run” |
+| Account / cloud / license servers | Login, activation over the network |
+| Bundling unused *remote* stacks “just in case” | Qt Network + TLS/curl/CUPS pulled in without need — strip when not `DT_NEEDED`; do **not** confuse this with Pulse/D-Bus local sockets |
+
+**ALLOWED product I/O:** USB-serial, local sound device (incl. via local audio daemon sockets), local filesystem read of **shipped** AppImage resources, X11/Wayland display.
+
+**Default for Implementer:** do not add remote/internet features or fat unused modules. Prefer the **smallest** AppImage that still runs. **Do not** remove local socket support that the host audio/GUI stack needs. When unsure → HANDOFF **For Architect**.
+
+Ship CW model **inside** the AppImage (`resources/models/`). Never download it.
 
 ## 3. Morse timing (PARIS)
 
@@ -200,17 +233,102 @@ Engine-emitted status/error strings shown in the UI must also be English.
 6. **Optional:** `setShortcut(QKeySequence(Qt::Key_Escape))` on the Stop button is acceptable **in addition to** a window-level shortcut if both stay in sync; the window-level path is required so Esc works while the read-only text edit has focus.
 7. **Semantics unchanged:** cooperative stop, key-up on abort, partial progress highlight retained (§7.3).
 
-## 8. AppImage packaging
+## 8. AppImage packaging (self-contained — HARD REQUIREMENT)
 
-Goal: **no Qt packages required on the end-user host**.
+### 8.0 What the **end user** gets (this is the product ask)
+
+The human operator / second PC must only do:
+
+```text
+chmod +x Ditonira-x86_64.AppImage
+./Ditonira-x86_64.AppImage
+```
+
+**No** Docker. **No** compiling. **No** “use an older PC to build”. **No** `apt install` of Qt, ONNX Runtime, ICU, PortAudio, or “library version N”.
+
+That single AppImage is the deliverable. Anything about containers or Ubuntu 20.04 is **only** how the **Implementer** manufactures that file — never instructions pushed to the end user.
+
+### 8.0.0 Product rule (non-negotiable)
+
+The shipped `dist/Ditonira-x86_64.AppImage` must run on a **different** Linux machine/distro **without** asking the user to install matching app-library versions.
+
+An AppImage that fails on another machine with `GLIBC_2.XX not found` / missing `.so` versions is **unacceptable** (P0). This was the original distribution goal.
+
+**Why Implementers mention “old glibc / container” (internal only):**  
+On Linux, an AppImage **embeds Qt/ORT/ICU/…** but **cannot embed the host `glibc`**. The binary always needs a host glibc **≥ the glibc of the machine that compiled it**. If we compile on a brand-new distro, older second PCs break. So the **factory** that *produces* the AppImage must use an **old-enough toolchain baseline** (convention: Ubuntu 20.04 / glibc 2.31). That is **not** “make the user compile on a old PC”; it is “Implementer builds the portable file correctly so the user never thinks about this.”
+
+- **End user:** run AppImage. Stop.
+- **Implementer factory:** produce AppImage with max needed GLIBC ≤ 2.31 (container/`ubuntu:20.04` or equivalent automated build). Do **not** ask the human to install Docker or fetch an old laptop unless they explicitly choose to help with builds.
+
+### 8.0.1 What must be bundled inside the AppImage
+
+| Component | Rule |
+|---|---|
+| Qt 5 (Core/Gui/Widgets/SerialPort/XcbQpa + plugins) | **Bundle** (linuxdeploy + qt plugin) |
+| ICU and other Qt private deps | **Bundle** (whatever sonames the *build* Qt needs — must travel with the AppImage) |
+| `libonnxruntime.so*` | **Bundle** under `$APPDIR/usr/lib` with RPATH `$ORIGIN/../lib` |
+| DeepCW `deepcw_en.onnx` | **Bundle** under `usr/share/ditonira/models/` |
+| PortAudio | Prefer **static** link into `ditonira` (already intended); do not require host `libportaudio` |
+| `libstdc++` / `libgcc_s` | **Bundle** if the build toolchain is newer than Ubuntu 20.04’s; when building *inside* 20.04, host libstdc++ of 20.04-class targets is OK |
+
+### 8.0.2 What may come from the host OS (whitelist)
+
+Only interfaces that are effectively “the machine”:
+
+- Dynamic linker / `libc.so.6` / `libm` / `libdl` / `libpthread` / `librt` (glibc ≥ build baseline).
+- **ALSA** `libasound.so.2` (audio device). Optional later: Pulse via host — still no versioned app stack.
+- X11/Wayland/GL driver stack as required by Qt platform plugins (linuxdeploy normally ships most userspace pieces; GPU drivers stay on host).
+
+**Forbidden host requirements:** any specific `libicu*.so.NN` from the distro, system Qt5 packages, system ONNX Runtime, “install libfoo7 because we built against foo7”.
+
+### 8.0.3 Release build procedure (**Implementer only** — invisible to end users)
+
+**Audience:** Implementer agent / CI. **Never** present these steps as user documentation or as “what you must do on your old PC.”
+
+1. Automate a **factory** build with glibc baseline ≤ Ubuntu 20.04 (preferred: `packaging/` script that uses Podman/Docker/`ubuntu:20.04` **on the build machine the Implementer controls**, or CI). Build deps stay inside that factory.
+2. Produce AppImage with `packaging/build-appimage.sh` **from that factory**.
+3. **Gate before Done / before handing the human the file:**
+   - Extract AppImage; `objdump -T usr/bin/ditonira | grep GLIBC_` — **no symbol newer than `GLIBC_2.31`**.
+   - Qt/ORT/ICU resolve from AppDir (bundled).
+   - Smoke start under `QT_QPA_PLATFORM=offscreen`.
+4. Hand the human **only** `dist/Ditonira-x86_64.AppImage` (+ “chmod +x && run”). In HANDOFF, record factory image for traceability — not as user steps.
+
+### 8.0.4 Steps (unchanged mechanics)
 
 1. Release build with relative RPATH (`$ORIGIN/../lib`).
-2. Bundle with `linuxdeploy` + Qt plugin: binary, `libQt5Core/Gui/Widgets/SerialPort`, `platforms/libqxcb.so`, icon, `.desktop`.
-3. Artifact: `Ditonira-x86_64.AppImage`.
+2. Bundle with `linuxdeploy` + Qt plugin: binary, Qt libs, `platforms/libqxcb.so`, icon, `.desktop`.
+3. Copy ORT + model into AppDir (script already does this; keep it).
+4. Artifact: `Ditonira-x86_64.AppImage`.
 
-**glibc compatibility:** prefer building on **Ubuntu 20.04** (or an equivalent container) so the AppImage runs on hosts no older than that base. The AppImage embeds Qt; it does not embed a newer glibc than the build host.
+Device permission: `/dev/ttyUSB*` / dialout — OS account config, not an apt dependency of Ditonira.
 
-Device permission: the user needs access to `/dev/ttyUSB*`, `/dev/ttyACM*`, etc. (typically `dialout`). Not an app dependency; documented in the README.
+### 8.0.5 Lean AppImage allowlist (MUST follow §2.1)
+
+**Rule in one line:** bundle **only** what Ditonira needs to open a window, key a serial line, capture audio, run local ONNX, and paint the waterfall — **nothing else**.
+
+**Explicit NO (strip from AppDir if linuxdeploy pulls them; never link them in CMake):**
+
+- `libQt5Network*`, `bearer` plugins, anything HTTP/FTP
+- `libcups*`, `printsupport`, printing plugins
+- `libssl*` / `libcrypto*` / `libnss*` / `libgnutls*` / certificate stores pulled for TLS **unless** proven `DT_NEEDED` (target = **not** needed)
+- Telemetry SDKs, update checkers, fontconfig “downloadable fonts”, online icon themes
+- QML, WebEngine, Multimedia (unless Architect later adds offline-only media — today: **no**), SQL drivers, Designer
+
+**Explicit YES (examples):**
+
+- Qt **Core / Gui / Widgets / SerialPort** + `platforms/libqxcb.so` (and minimal Xcb/GL deps Qt needs to show a window)
+- ICU / png / harfbuzz / glib **only if** required by that Qt stack
+- `libonnxruntime.so*` + shipped `deepcw_en.onnx`
+- Host `libasound` OK for audio device (not an “internet” dep)
+
+**Implementer checklist before Done:**
+
+1. CMake `target_link_libraries` = only modules we use (no Network, no PrintSupport).
+2. Post-`linuxdeploy` cleanup deletes forbidden plugin dirs/libs.
+3. `readelf -d usr/bin/ditonira` / AppDir inventory: no Network/CUPS/TLS families, or HANDOFF explains a true `DT_NEEDED` exception (Architect must accept).
+4. Zero code paths that use `QNetworkAccessManager`, download fonts/models, send telemetry, or open **remote** TCP/UDP/HTTP for product features. **Local** sockets for audio/GUI (Pulse/PipeWire/D-Bus/etc.) remain OK when the stack needs them.
+
+Graphics + local audio (including local daemon sockets) = fine. Internet / remote phone-home = **defect**.
 
 ### 8.1 Clean rebuild policy (Implementer — mandatory, every change)
 
@@ -258,7 +376,7 @@ README.md
 - RTS or DTR + polarity act as the key.
 - WPM and text drive Morse TX.
 - Stop aborts and leaves the line key-up.
-- AppImage runs on Linux x86_64 without system Qt.
+- AppImage runs on Linux x86_64 **without installing app libraries** on the host (§8.0); release builds from Ubuntu 20.04 baseline (no `GLIBC_2.34+` requirement from a newer build host).
 - All visible UI strings are English (§7.2).
 - During TX, already-handled text is visually distinct from remaining text; Stop leaves a partial highlight (§7.3).
 - During TX, **Esc** aborts the same as **Stop (Esc)**; when idle, Esc does not quit or wipe the form (§7.4).
@@ -314,6 +432,7 @@ Project rules under `.cursor/rules/` mirror §11 for LLM agents in Cursor. They 
 | `architect.mdc` | Working under `docs/` |
 | `implementer.mdc` | Working under `src/`, `CMakeLists.txt`, `packaging/`, `resources/` |
 | `implementer-clean-rebuild.mdc` | Always (Implementer clean-rebuild mandate) |
+| `implementer-offline-lean.mdc` | Always (offline-only; no telemetry/downloads; lean bundle) |
 | `tester.mdc` | Working under `tests/`, HANDOFF, ENGINEERING_LOG |
 
 Implementer coding constraints for the MVP are summarized in `implementer.mdc` and detailed in §1–10 of this document. Work is dispatched via `HANDOFF.md` (e.g. DEC-001).

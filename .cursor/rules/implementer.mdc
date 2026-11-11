@@ -14,7 +14,8 @@ Active tasks: `docs/HANDOFF.md` → **For Implementer**.
 
 - **Do not** edit `docs/ARCHITECTURE.md`. Blockers → HANDOFF **For Architect**.
 - Stack only: **C++17**, **Qt 5 Widgets**, **QtSerialPort**, **CMake ≥ 3.16**, AppImage x86_64.
-- No Qt 6. No sidetone, paddle, receive, macros, or non-Linux targets in MVP.
+- No Qt 6. No sidetone, paddle, macros, or non-Linux targets beyond what architecture approved.
+- **Offline + lean (§2.1 / §8.0.5 / `implementer-offline-lean.mdc`):** no network code, no telemetry, no runtime downloads (fonts/models/updates), no CUPS/HTTP/TLS bloat. Bundle only what TX/RX/waterfall need.
 - Prefer small, compile-verified changes. Update HANDOFF status when done.
 - Documentation, comments, **and all UI strings: English only**.
 
@@ -55,9 +56,15 @@ src/SerialKeyLine.*       # QSerialPort RTS/DTR + polarity; key-up on close/abor
 - Do not invent alternate decoders; do not port React/WASM/Web Serial keyer/JA/NR-marketing.
 - Ship `resources/models/deepcw_en.onnx` + ORT in AppImage; attribute MIT in `docs/THIRD_PARTY.md`.
 
+## Portable AppImage (P0 — ARCHITECTURE §8.0)
+
+- **User deliverable:** one AppImage → chmod + run on another PC. Never tell the human to install Docker, compile, or use an “older PC”.
+- **Your factory (invisible to user):** produce that file with glibc baseline ≤ 2.31 (e.g. ubuntu:20.04 container/CI). Gate: no `GLIBC_` > **2.31**.
+- Breaking on a second distro = **bug** (ENG-007). Fix the artifact; do not outsource the problem to the user.
+
 ## Clean rebuild (ALWAYS — see also `implementer-clean-rebuild.mdc`)
 
-Before Done / before anyone runs the app: delete `build`, `build-appimage`, `AppDir`, `dist`, and old `*.AppImage`; then full Release reconfigure+build. Rebuild AppImage if that is what will be launched. Quote the exact fresh path. Policy: ARCHITECTURE §8.1.
+Before Done / before anyone runs the app: delete `build`, `build-appimage`, `AppDir`, `dist`, and old `*.AppImage`; then full Release reconfigure+build. Rebuild AppImage if that is what will be launched. Quote the exact fresh path. Policy: ARCHITECTURE §8.1. Shipping portable builds: §8.0 + Ubuntu 20.04.
 
 ## Done when
 

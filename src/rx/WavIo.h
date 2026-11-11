@@ -17,4 +17,8 @@ bool readWavFile(const std::string &path, WavData *out, std::string *errorOut = 
 std::vector<float> resampleLinear(const float *input, int inputLen, int inputRate,
                                   int targetRate);
 
+/// Realtime-safe resample into a preallocated buffer. Returns samples written (0 on error).
+int resampleLinearInto(const float *input, int inputLen, int inputRate, int targetRate,
+                       float *out, int outCapacity);
+
 } // namespace deepcw

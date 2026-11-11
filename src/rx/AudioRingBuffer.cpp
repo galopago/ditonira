@@ -1,7 +1,6 @@
 #include "rx/AudioRingBuffer.h"
 
 #include <algorithm>
-#include <cstring>
 
 namespace deepcw {
 
@@ -14,27 +13,16 @@ AudioRingBuffer::AudioRingBuffer(int capacitySamples)
 
 void AudioRingBuffer::resize(int capacitySamples)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_capacity = std::max(0, capacitySamples);
-    m_data.assign(static_cast<size_t>(m_capacity), 0.f);
-    m_writePos = 0;
-    m_filled = 0;
-    m_version.fetch_add(1);
-}
-
-int AudioRingBuffer::capacity() const
-{
-    std::lock_guard<std::mutex> lock(m_mutex);
-    return m_capacity;
+    const int cap = std::max(0, capacitySamples);
+    m_data.assign(static_cast<size_t>(cap), 0.f);
+    m_capacity.store(cap, std::memory_order_release);
+    m_writeCount.store(0, std::memory_order_release);
 }
 
 void AudioRingBuffer::clear()
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
     std::fill(m_data.begin(), m_data.end(), 0.f);
-    m_writePos = 0;
-    m_filled = 0;
-    m_version.fetch_add(1);
+    m_writeCount.store(0, std::memory_order_release);
 }
 
 void AudioRingBuffer::write(const float *samples, int count)
@@ -42,45 +30,70 @@ void AudioRingBuffer::write(const float *samples, int count)
     if (!samples || count <= 0) {
         return;
     }
-    std::lock_guard<std::mutex> lock(m_mutex);
-    if (m_capacity <= 0) {
+    const int cap = m_capacity.load(std::memory_order_acquire);
+    if (cap <= 0 || m_data.empty()) {
         return;
     }
     for (int i = 0; i < count; ++i) {
-        m_data[static_cast<size_t>(m_writePos)] = samples[i];
-        m_writePos = (m_writePos + 1) % m_capacity;
-        if (m_filled < m_capacity) {
-            ++m_filled;
-        }
+        const std::uint64_t w = m_writeCount.load(std::memory_order_relaxed);
+        m_data[static_cast<size_t>(w % static_cast<std::uint64_t>(cap))] = samples[i];
+        m_writeCount.store(w + 1, std::memory_order_release);
     }
-    m_version.fetch_add(1);
 }
 
 std::uint64_t AudioRingBuffer::snapshot(std::vector<float> *out) const
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    out->assign(static_cast<size_t>(m_capacity), 0.f);
-    if (m_capacity <= 0 || m_filled <= 0) {
-        return m_version.load();
+    const int cap = m_capacity.load(std::memory_order_acquire);
+    out->assign(static_cast<size_t>(std::max(0, cap)), 0.f);
+    if (cap <= 0 || m_data.empty()) {
+        return m_writeCount.load(std::memory_order_acquire);
     }
-    const int start =
-        (m_filled < m_capacity) ? 0 : m_writePos;
-    const int n = (m_filled < m_capacity) ? m_filled : m_capacity;
-    for (int i = 0; i < n; ++i) {
-        (*out)[static_cast<size_t>(i)] =
-            m_data[static_cast<size_t>((start + i) % m_capacity)];
-    }
-    // Keep full-window length for decode (leading zeros if not yet full).
-    if (m_filled < m_capacity) {
-        // Move samples to the end so newest align with DeepCW "right side".
-        std::vector<float> shifted(static_cast<size_t>(m_capacity), 0.f);
-        const int offset = m_capacity - m_filled;
-        for (int i = 0; i < m_filled; ++i) {
-            shifted[static_cast<size_t>(offset + i)] = (*out)[static_cast<size_t>(i)];
+
+    // Seqlock-ish: retry if writer advances a lot mid-copy.
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        const std::uint64_t end = m_writeCount.load(std::memory_order_acquire);
+        const std::uint64_t available = std::min(end, static_cast<std::uint64_t>(cap));
+        const std::uint64_t start = end - available;
+        for (std::uint64_t i = 0; i < available; ++i) {
+            const std::uint64_t abs = start + i;
+            (*out)[static_cast<size_t>(cap - available + i)] =
+                m_data[static_cast<size_t>(abs % static_cast<std::uint64_t>(cap))];
         }
-        *out = std::move(shifted);
+        const std::uint64_t end2 = m_writeCount.load(std::memory_order_acquire);
+        if (end2 - end < static_cast<std::uint64_t>(cap / 4 + 1)) {
+            return end2;
+        }
     }
-    return m_version.load();
+    return m_writeCount.load(std::memory_order_acquire);
+}
+
+void AudioRingBuffer::consumeNew(std::uint64_t *cursor, std::vector<float> *out) const
+{
+    out->clear();
+    if (!cursor) {
+        return;
+    }
+    const int cap = m_capacity.load(std::memory_order_acquire);
+    if (cap <= 0 || m_data.empty()) {
+        return;
+    }
+    const std::uint64_t end = m_writeCount.load(std::memory_order_acquire);
+    std::uint64_t start = *cursor;
+    if (end < start) {
+        // Counter reset (clear/resize).
+        start = end;
+    }
+    if (end - start > static_cast<std::uint64_t>(cap)) {
+        // Consumer fell behind — skip to newest window.
+        start = end - static_cast<std::uint64_t>(cap);
+    }
+    const std::uint64_t n = end - start;
+    out->resize(static_cast<size_t>(n));
+    for (std::uint64_t i = 0; i < n; ++i) {
+        (*out)[static_cast<size_t>(i)] =
+            m_data[static_cast<size_t>((start + i) % static_cast<std::uint64_t>(cap))];
+    }
+    *cursor = end;
 }
 
 } // namespace deepcw
